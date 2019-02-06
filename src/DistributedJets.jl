@@ -4,7 +4,7 @@ type stability / efficiency of JopBlock constructor ??
 module DistributedJets
 
 using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
-import Jets:JetAbstractSpace, JopAdjoint, JopBlock
+import Jets:JetAbstractSpace, JetBSpace, JopAdjoint, JopBlock
 
 #
 # DArray extensions
@@ -145,7 +145,14 @@ function Jets.JopBlock(ops::DArray{T,2}) where {T<:Jop}
 
     rng = JetDSpace(blkspaces, blkidxs, idxs)
 
-    _ops = DArray(I->[JopBlock([ops[i,j] for i in I[1], j in I[2]]) for k=1:1, l=1:1], pids, indices(ops, 1), indices(ops, 2))
+    function build(I, ops)
+        irng = indices(ops, 1)[I[1][1]]
+        jrng = indices(ops, 2)[I[2][1]]
+        A = [ops[i,j] for i in irng, j in jrng]
+        [JopBlock(A) for k=1:1, l=1:1]
+    end
+    n1,n2 = length(indices(ops, 1)),length(indices(ops, 2))
+    _ops = DArray(I->build(I, ops), (n1,n2), procs(ops), [n1,n2])
 
     JopDBlock(dom, rng, _ops)
 end

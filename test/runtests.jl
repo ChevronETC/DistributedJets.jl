@@ -86,3 +86,33 @@ end
 @testset "JopDBlock" begin
     function
 end
+
+#
+#
+#
+using Distributed
+addprocs(2)
+@everywhere using DistributedJets, Jets
+
+ops = DArray(I->[JopFoo(10) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+
+A = @blockop ops
+
+domain(A)
+range(A)
+
+indices(ops,1)
+indices(ops,2)
+
+n1,n2 = length(indices(ops, 1)),length(indices(ops, 2))
+@everywhere function build(I, ops)
+    irng = DistributedJets.indices(ops,1)[I[1][1]]
+    jrng = DistributedJets.indices(ops,2)[I[2][1]]
+    A = [ops[i,j] for i in irng, j in jrng]
+    [Jets.JopBlock(A) for k=1:1, j=1:1]
+end
+
+_ops = DArray(I->build(I,ops), (n1,n2), workers(), [n1,n2])
+
+_ops[1,1]
+_ops[2,1]
