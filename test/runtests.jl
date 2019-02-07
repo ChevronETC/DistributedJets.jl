@@ -57,62 +57,31 @@ end
     @test procs(R) == workers()
 end
 
-#@testset "JedDSpace operations" begin
-A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
-R = range(A)
-@test dzeros(4) ≈ zeros(R)
-@test dones(4) ≈ ones(R)
-d = rand(R)
-_d = drand(4)
-@test size(d) == size(_d)
-@test d.cuts == _d.cuts
-@test d.indices == _d.indices
-d = Array(R)
-@test size(d) == size(_d)
-@test d.cuts == _d.cuts
-@test d.indices == _d.indices
+@testset "JetDSpace operations" begin
+    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
+    R = range(A)
+    @test dzeros(4) ≈ zeros(R)
+    @test dones(4) ≈ ones(R)
+    d = rand(R)
+    _d = drand(4)
+    @test size(d) == size(_d)
+    @test d.cuts == _d.cuts
+    @test d.indices == _d.indices
+    d = Array(R)
+    @test size(d) == size(_d)
+    @test d.cuts == _d.cuts
+    @test d.indices == _d.indices
 
-x = block(d,R,1)
-x .= π
-block!(d,R,1,x)
-@test d[1:2] ≈ [π,π]
-
-#end
+    x = getblock(d,R,1)
+    x .= π
+    setblock!(d,R,1,x)
+    @test d[1:2] ≈ [π,π]
+    x .= 0
+    remotecall_fetch(getblock!, workers()[1], d, R, 1, x) ≈ [π,π]
+end
 
 @everywhere function myblocks(i,j)
-
 end
 
 @testset "JopDBlock" begin
-    function
 end
-
-#
-#
-#
-using Distributed
-addprocs(2)
-@everywhere using DistributedJets, Jets
-
-ops = DArray(I->[JopFoo(10) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
-
-A = @blockop ops
-
-domain(A)
-range(A)
-
-indices(ops,1)
-indices(ops,2)
-
-n1,n2 = length(indices(ops, 1)),length(indices(ops, 2))
-@everywhere function build(I, ops)
-    irng = DistributedJets.indices(ops,1)[I[1][1]]
-    jrng = DistributedJets.indices(ops,2)[I[2][1]]
-    A = [ops[i,j] for i in irng, j in jrng]
-    [Jets.JopBlock(A) for k=1:1, j=1:1]
-end
-
-_ops = DArray(I->build(I,ops), (n1,n2), workers(), [n1,n2])
-
-_ops[1,1]
-_ops[2,1]

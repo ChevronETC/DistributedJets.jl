@@ -1,7 +1,7 @@
 module DistributedJets
 
 using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
-import Jets:JetAbstractSpace, JetBSpace, JetBlock
+import Jets:JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint
 
 #
 # DArray extensions
@@ -70,7 +70,7 @@ function getblocklocal!(x, R, iblock, xblock)
 end
 getblocklocal(x::DArray, R::JetDSpace, iblock::Integer) = getblocklocal!(x, R, iblock, Array(space(R, iblock)))
 Jets.getblock!(x::DArray, R::JetDSpace, iblock::Integer, xblock::AbstractArray) = remotecall_fetch(getblocklocal!, blockproc(R, iblock), x, R, iblock, xblock)
-Jets.getblock(x::DArray, R::JetDSpace, iblock::Integer) = remotecall_fetch(getblocklocal, blockprop(R, iblock), x, R, iblock)
+Jets.getblock(x::DArray, R::JetDSpace, iblock::Integer) = remotecall_fetch(getblocklocal, blockproc(R, iblock), x, R, iblock)
 
 function Jets.setblock!(x::DArray, R::JetDSpace, iblock::Integer, xblock::AbstractArray)
     function _block!(x, R, iblock, xblock)
@@ -139,13 +139,13 @@ function Jets.JetBlock(jets::DArray{T,2}) where {T<:Jet}
     function build(I, jets)
         irng = indices(jets, 1)[I[1][1]]
         jrng = indices(jets, 2)[I[2][1]]
-        A = [jets[i,j] for i in irng, j in jrng]
-        [JopBlock(A) for k=1:1, l=1:1]
+        _jets = [jets[i,j] for i in irng, j in jrng]
+        [JetBlock(_jets) for k=1:1, l=1:1]
     end
     n1,n2 = length(indices(jets, 1)),length(indices(jets, 2))
     _jets = DArray(I->build(I, jets), (n1,n2), procs(jets), [n1,n2])
 
-    Jet(dom = dom, rng = rng, f! = JopDBlock_f!, df! = JopDBlock_df!, df′! = JopDBlock_df′!, s = (jets=_jets,))
+    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!, s = (jets=_jets,))
 end
 
 function addmasterpid(pids)
@@ -198,7 +198,7 @@ function JetDBlock_df′!(m::AbstractArray, d::DArray; jets, kwargs...)
     m
 end
 
-function Jets.point!(jet::Jet{D,R,typeof(JopDBlock_f!)}, mₒ::AbstractArray) where {D<:JetAbstractSpace,R<:JetAbstractSpace}
+function Jets.point!(jet::Jet{D,R,typeof(JetDBlock_f!)}, mₒ::AbstractArray) where {D<:JetAbstractSpace,R<:JetAbstractSpace}
     jets = state(jet).jets
     pids = procs(jets)
     _mₒ = bcast(mₒ, addmasterpid(pids))
@@ -213,7 +213,7 @@ function Jets.point!(jet::Jet{D,R,typeof(JopDBlock_f!)}, mₒ::AbstractArray) wh
     mₒ
 end
 
-Distributed.procs(A::Jop{Jet{D,R,typeof(JopDBlock_f!)}}) where {D<:JetAbstractSpace, R<:JetAbstractSpace} = procs(state(A).jets)
+Distributed.procs(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}) where {D<:JetAbstractSpace, R<:JetAbstractSpace} = procs(state(A).jets)
 
 nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R}= size(state(jet).jets)
 nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}, i) where {D,R} = size(state(jet).jets, i)
@@ -221,12 +221,12 @@ nblocks(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}) where {D,R} = nblocks(jet(A))
 nblocks(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}, i) where {D,R} = nblocks(jet(A), i)
 
 Base.getindex(jet::Jet{D,R,typeof(JetDBlock_f!)}, i, j) where {D,R} = state(jet).jets[i,j]
-Base.getindex(A::Jop{Jet{D,R,typeof(JetBlock_f!)}}, i, j) where {D,R} = getindex(jet(A))
-Base.getindex(A::JopAdjoint{Jet{D,R,typeof(JetBlock_f!)}}, i, j) where {D,R} = state(A).jets[j,i]
+Base.getindex(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}, i, j) where {D,R} = getindex(jet(A))
+Base.getindex(A::JopAdjoint{Jet{D,R,typeof(JetDBlock_f!)}}, i, j) where {D,R} = state(A).jets[j,i]
 
-Jets.indices(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) = indices(state(A).jets, i)
-Jets.indices(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) = indices(jet(A), i)
-Jets.indices(A::JopAdjoint{T}, i::Integer) where {T<:JopDBlock} = indices(A.op, i)
+Jets.indices(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R} = indices(state(A).jets, i)
+Jets.indices(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) where {D,R} = indices(jet(A), i)
+Jets.indices(A::JopAdjoint{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) where {D,R} = indices(A.op, i == 1 ? 2 : 1)
 
 export blockproc
 
