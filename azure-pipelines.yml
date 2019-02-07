@@ -20,7 +20,7 @@ steps:
     git -c http.https://chevron.visualstudio.com/ETC-ESD-SR-Incubator/_git/Jets.jl.extraheader="AUTHORIZATION: basic $AUTH" clone -b tqff/morejets https://chevron.visualstudio.com/ETC-ESD-SR-Incubator/_git/Jets.jl /home/vsts/.julia/dev/Jets
     git -c http.https://chevron.visualstudio.com/ETC-ESD-ParallelOperations.jl/_git/ParallelOperations.jl.extraheader="AUTHORIZATION: basic $AUTH" clone https://chevron.visualstudio.com/ETC-ESD-ParallelOperations.jl/_git/ParallelOperations.jl /home/vsts/.julia/dev/ParallelOperations
 
-    /opt/julia/bin/julia -e 'using Pkg; pkg"add Random Serialization"'
+    /opt/julia/bin/julia -e 'using Pkg; pkg"add Distributed, DistributedArrays, Random Serialization"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local /home/vsts/.julia/dev/Jets"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local /home/vsts/.julia/dev/ParallelOperations"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local /home/vsts/.julia/dev/DistributedJets"'
