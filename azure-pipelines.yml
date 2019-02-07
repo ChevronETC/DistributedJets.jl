@@ -24,7 +24,6 @@ steps:
     /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/Jets"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/ParallelOperations"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"develop --local $(HOME)/.julia/dev/DistributedJets"'
-    /opt/julia/bin/julia -e 'using Pkg; pkg"build FolderStorage"'
     /opt/julia/bin/julia -e 'using Pkg; pkg"precompile"'
   env:
     MYPAT: $(PAT)
