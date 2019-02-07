@@ -1,10 +1,7 @@
-#=
-type stability / efficiency of JopBlock constructor ??
-=#
 module DistributedJets
 
 using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
-import Jets:JetAbstractSpace, JetBSpace, JopAdjoint, JopBlock
+import Jets:JetAbstractSpace, JetBSpace, JetBlock
 
 #
 # DArray extensions
@@ -92,27 +89,21 @@ for f in (:ones, :rand, :zeros)
 end
 Base.Array(R::JetDSpace{T}) where {T} = DArray(I->Array{T,1}(undef, length(I[1])), procs(R), indices(R))
 
-struct JopDBlock{T<:JopBlock,D<:JetAbstractSpace,R<:JetAbstractSpace} <: Jop
-    dom::D
-    rng::R
-    ops::DArray{T, 2, Array{T,2}}
-end
+function Jets.JetBlock(jets::DArray{T,2}) where {T<:Jet}
+    length(jets.cuts[2]) < 3 || error("Distributed support is across rows")
 
-function Jets.JopBlock(ops::DArray{T,2}) where {T<:Jop}
-    length(ops.cuts[2]) < 3 || error("Distributed support is across rows")
-
-    function _domain(ops)
-        _ops = localpart(ops)
-        N = size(_ops,2)
-        N == 1 && (return domain(_ops[1,1]))
-        JetBSpace([domain(_ops[1,i]) for i=1:N])
+    function _domain(jets)
+        _jets = localpart(jets)
+        N = size(_jets,2)
+        N == 1 && (return domain(_jets[1,1]))
+        JetBSpace([domain(_jets[1,i]) for i=1:N])
     end
-    dom = remotecall_fetch(_domain, procs(ops)[1], ops)
+    dom = remotecall_fetch(_domain, procs(jets)[1], jets)
 
-    pids = procs(ops)[:]
+    pids = procs(jets)[:]
 
-    blkranges(ops) = DArray(I->[range(ops[i]) for i in I[1]], pids, indices(ops, 1))
-    blkspaces = blkranges(ops)
+    blkranges(jets) = DArray(I->[range(jets[i]) for i in I[1]], pids, indices(jets, 1))
+    blkspaces = blkranges(jets)
 
     counts = zeros(Int, length(pids))
     _count(spaces) = mapreduce(length, +, localpart(spaces))
@@ -129,7 +120,7 @@ function Jets.JopBlock(ops::DArray{T,2}) where {T<:Jop}
         idxs[i] = frst:lst
     end
 
-    blkidxs = DArray(I->[0:0 for i in I[1]], pids, indices(ops, 1))
+    blkidxs = DArray(I->[0:0 for i in I[1]], pids, indices(jets, 1))
     function _blkidxs!(_blkidxs, _blkspaces, firstindex)
         lst = firstindex - 1
         for (i,idx) in enumerate(localindices(_blkidxs)[1])
@@ -145,30 +136,17 @@ function Jets.JopBlock(ops::DArray{T,2}) where {T<:Jop}
 
     rng = JetDSpace(blkspaces, blkidxs, idxs)
 
-    function build(I, ops)
-        irng = indices(ops, 1)[I[1][1]]
-        jrng = indices(ops, 2)[I[2][1]]
-        A = [ops[i,j] for i in irng, j in jrng]
+    function build(I, jets)
+        irng = indices(jets, 1)[I[1][1]]
+        jrng = indices(jets, 2)[I[2][1]]
+        A = [jets[i,j] for i in irng, j in jrng]
         [JopBlock(A) for k=1:1, l=1:1]
     end
-    n1,n2 = length(indices(ops, 1)),length(indices(ops, 2))
-    _ops = DArray(I->build(I, ops), (n1,n2), procs(ops), [n1,n2])
+    n1,n2 = length(indices(jets, 1)),length(indices(jets, 2))
+    _jets = DArray(I->build(I, jets), (n1,n2), procs(jets), [n1,n2])
 
-    JopDBlock(dom, rng, _ops)
+    Jet(dom = dom, rng = rng, f! = JopDBlock_f!, df! = JopDBlock_df!, df′! = JopDBlock_df′!, s = (jets=_jets,))
 end
-
-Base.adjoint(A::JopDBlock{D,R,T}) where {D,R,T} = JopAdjoint(A)
-
-Jets.domain(A::JopDBlock) = A.dom
-Base.range(A::JopDBlock) = A.rng
-Distributed.procs(A::JopDBlock) = procs(A.ops)
-Distributed.procs(A::JopAdjoint{T}) where {T<:JopDBlock} = procs(A.op.ops)
-
-Base.getindex(A::JopDBlock, i, j) = A.ops[i,j]
-Base.getindex(A::JopAdjoint{T}, i, j) where {T<:JopDBlock} = A.op.ops[j,i]
-
-Jets.indices(A::JopDBlock, i::Integer) = indices(A.ops, i)
-Jets.indices(A::JopAdjoint{T}, i::Integer) where {T<:JopDBlock} = indices(A.op.ops, i)
 
 function addmasterpid(pids)
     if myid() ∉ pids
@@ -177,39 +155,78 @@ function addmasterpid(pids)
     pids
 end
 
-function LinearAlgebra.mul!(d::DArray, A::JopDBlock, m::AbstractArray)
-    pids = procs(A)
+function JetDBlock_f!(d::DArray, m::AbstractArray; jets, kwargs...)
+    pids = procs(jets)
     _m = bcast(m, addmasterpid(pids))
-    function _mul!(d, A, _m)
-        mul!(localpart(d), localpart(A.ops)[1], localpart(_m))
+    function _f!(d, jets, _m, jets)
+        jet = localpart(jets)[1]
+        f!(localpart(d), jet, localpart(_m); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
     end
     @sync for pid in pids
-        @async remotecall_fetch(_mul!, pid, d, A, _m)
+        @async remotecall_fetch(_f!, pid, d, jets, _m, jets)
     end
     d
 end
 
-function LinearAlgebra.mul!(m::AbstractArray, A::JopAdjoint{T}, d::DArray) where {T<:JopDBlock}
-    pids = procs(A)
-    _m = ArrayFutures(m, addmasterpid(pids))
-    function _mul!(m, A, d)
-        mul!(localpart(_m), JopAdjoint(localpart(A.op.ops)[1,1]), localpart(d))
+function JetDBlock_df!(d::DArray, m::AbstractArray; jets, kwargs...)
+    pids = procs(jets)
+    _m = bcast(m, addmasterpid(pids))
+    function _df!(d, jets, _m, jets)
+        jet = localpart(jets)[1]
+        df!(localpart(d), jet, localpart(_m); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
     end
     @sync for pid in pids
-        @async remotecall_fetch(_mul!, pid, _m, A, d)
+        @async remotecall_fetch(_df!, pid, d, jets, _m, jets)
+    end
+    d
+end
+
+function JetDBlock_df′!(m::AbstractArray, d::DArray; jets, kwargs...)
+    pids = procs(jets)
+    _m = ArrayFutures(m, addmasterpid(pids))
+    function _df′!(m, d, jets)
+        jet = localpart(jets)[1]
+        df′!(localpart(_m), jet, localpart(d); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
+        nothing
+    end
+    @sync for pid in pids
+        @async remotecall_fetch(_df′!, pid, _m, d, jets)
     end
     reduce!(_m)
     m
 end
 
-function Jets.jacobian(A::JopDBlock, m::AbstractArray)
-    pids = procs(A)[:]
-    _m = bcast(m, addmasterpid(pids))
-    ops = DArray(I->[JopBlock([jacobian(A[i,j], localpart(_m)) for i in I[1], j in I[2]]) for k=1:1, l=1:1], pids, indices(A, 1), indices(A, 2))
-    JopBlock(ops)
+function Jets.point!(jet::Jet{D,R,typeof(JopDBlock_f!)}, mₒ::AbstractArray) where {D<:JetAbstractSpace,R<:JetAbstractSpace}
+    jets = state(jet).jets
+    pids = procs(jets)
+    _mₒ = bcast(mₒ, addmasterpid(pids))
+    function _point!(jets, _mₒ)
+        jet = localpart(jets)[1]
+        point!(jet, localpart(_mₒ))
+        nothing
+    end
+    @sync for pid in pids
+        @async remotecall_fetch(_point!, pid, sjet, _mₒ)
+    end
+    mₒ
 end
+
+Distributed.procs(A::Jop{Jet{D,R,typeof(JopDBlock_f!)}}) where {D<:JetAbstractSpace, R<:JetAbstractSpace} = procs(state(A).jets)
+
+nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R}= size(state(jet).jets)
+nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}, i) where {D,R} = size(state(jet).jets, i)
+nblocks(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}) where {D,R} = nblocks(jet(A))
+nblocks(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}, i) where {D,R} = nblocks(jet(A), i)
+
+Base.getindex(jet::Jet{D,R,typeof(JetDBlock_f!)}, i, j) where {D,R} = state(jet).jets[i,j]
+Base.getindex(A::Jop{Jet{D,R,typeof(JetBlock_f!)}}, i, j) where {D,R} = getindex(jet(A))
+Base.getindex(A::JopAdjoint{Jet{D,R,typeof(JetBlock_f!)}}, i, j) where {D,R} = state(A).jets[j,i]
+
+Jets.indices(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) = indices(state(A).jets, i)
+Jets.indices(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) = indices(jet(A), i)
+Jets.indices(A::JopAdjoint{T}, i::Integer) where {T<:JopDBlock} = indices(A.op, i)
 
 export blockproc
 
