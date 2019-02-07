@@ -158,13 +158,13 @@ end
 function JetDBlock_f!(d::DArray, m::AbstractArray; jets, kwargs...)
     pids = procs(jets)
     _m = bcast(m, addmasterpid(pids))
-    function _f!(d, jets, _m, jets)
+    function _f!(d, _m, jets)
         jet = localpart(jets)[1]
         f!(localpart(d), jet, localpart(_m); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
     end
     @sync for pid in pids
-        @async remotecall_fetch(_f!, pid, d, jets, _m, jets)
+        @async remotecall_fetch(_f!, pid, d, _m, jets)
     end
     d
 end
@@ -172,13 +172,13 @@ end
 function JetDBlock_df!(d::DArray, m::AbstractArray; jets, kwargs...)
     pids = procs(jets)
     _m = bcast(m, addmasterpid(pids))
-    function _df!(d, jets, _m, jets)
+    function _df!(d, _m, jets)
         jet = localpart(jets)[1]
         df!(localpart(d), jet, localpart(_m); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
     end
     @sync for pid in pids
-        @async remotecall_fetch(_df!, pid, d, jets, _m, jets)
+        @async remotecall_fetch(_df!, pid, d, _m, jets)
     end
     d
 end
@@ -186,7 +186,7 @@ end
 function JetDBlock_df′!(m::AbstractArray, d::DArray; jets, kwargs...)
     pids = procs(jets)
     _m = ArrayFutures(m, addmasterpid(pids))
-    function _df′!(m, d, jets)
+    function _df′!(_m, d, jets)
         jet = localpart(jets)[1]
         df′!(localpart(_m), jet, localpart(d); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
