@@ -1,11 +1,6 @@
-using Revise
-
 using Distributed
 
 addprocs(2)
-
-@everywhere using Revise
-
 @everywhere using DistributedArrays, DistributedJets, Jets, Test
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
@@ -81,7 +76,81 @@ end
 end
 
 @everywhere function myblocks(i,j)
+    if i ∈ (1,2,3) && j ∈ (2,3,1)
+        return JopBar(10)
+    elseif i == (2,3) && j == 4
+        JopZeroBlock(JetSpace(Float64,10),JetSpace(Float64,10))
+    elseif i == 2 && j == 4
+        JopBaz(rand(10,10)) ∘ JopBar(10)
+    else
+        return JopBaz(rand(10,10))
+    end
 end
 
-@testset "JopDBlock" begin
+@testset "JopDBlock, heterogeneous" begin
+    _F = DArray(I->[myblocks(i,j) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+    F = @blockop _F
+
+    _G = [_F[i,j] for i in 1:3, j in 1:4]
+    G = @blockop _G
+
+    @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
+    @test ones(domain(F)) ≈ ones(40)
+    @test zeros(range(F)) ≈ DArray(I->zeros(length(I[1])), procs(_F), [1:20,21:30])
+    @test zeros(domain(F)) ≈ zeros(40)
+    @test size(rand(domain(F))) == (40,)
+    x = rand(range(F))
+    @test size(x) == (30,)
+    @test x.cuts == [[1,21,31]]
+    x = Array(range(F))
+    @test size(x) == (30,)
+    @test x.cuts == [[1,21,31]]
+
+    m = rand(domain(F))
+    @test collect(F*m) ≈ G*m
+
+    J = jacobian(F, m)
+    _J = jacobian(G, m)
+
+    δm = rand(domain(J))
+    @test collect(J*δm) ≈ _J*δm
+
+    δd = rand(range(J))
+    @test J'*δd ≈ _J'*collect(δd)
+end
+
+@testset "JopDBlock, homogeneous" begin
+    _F = DArray(I->[JopBar(10) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+    F = @blockop _F
+
+    _G = [_F[i,j] for i in 1:3, j in 1:4]
+    G = @blockop _G
+
+    @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
+    @test ones(domain(F)) ≈ ones(40)
+    @test zeros(range(F)) ≈ DArray(I->zeros(length(I[1])), procs(_F), [1:20,21:30])
+    @test zeros(domain(F)) ≈ zeros(40)
+    @test size(rand(domain(F))) == (40,)
+    x = rand(range(F))
+    @test size(x) == (30,)
+    @test x.cuts == [[1,21,31]]
+    x = Array(range(F))
+    @test size(x) == (30,)
+    @test x.cuts == [[1,21,31]]
+
+    m = rand(domain(F))
+    @test collect(F*m) ≈ G*m
+
+    J = jacobian(F, m)
+    _J = jacobian(G, m)
+
+    δm = rand(domain(J))
+    @test collect(J*δm) ≈ _J*δm
+
+    δd = rand(range(J))
+    @test J'*δd ≈ _J'*collect(δd)
 end

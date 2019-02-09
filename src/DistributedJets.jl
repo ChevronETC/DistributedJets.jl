@@ -1,12 +1,13 @@
 module DistributedJets
 
 using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
-import Jets:JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint
+import Jets:JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint, df!, df′!, f!, point!
 
 #
 # DArray extensions
 #
-function DistributedArrays.DArray(init::Function, pids::AbstractVector{Int}, rngs::Vector{UnitRange{Int}}...)
+function DistributedArrays.DArray(init::Function, _pids::AbstractArray{Int}, rngs::Vector{UnitRange{Int}}...)
+    pids = vec(_pids)
     np = mapreduce(length, *, rngs)
     @assert length(pids) >= np
     pids = reshape(pids[1:np], map(rng->length(rng), rngs))
@@ -88,6 +89,16 @@ for f in (:ones, :rand, :zeros)
     @eval (Base.$f)(R::JetDSpace{T}) where {T} = DArray(I->($f)(T, length(I[1])), procs(R), indices(R))
 end
 Base.Array(R::JetDSpace{T}) where {T} = DArray(I->Array{T,1}(undef, length(I[1])), procs(R), indices(R))
+
+function Jets.JopBlock(A::DArray{T,2}) where {T<:Jop}
+    jets = DArray(I->[jet(A[irow,icol]) for irow in I[1], icol in I[2]], procs(A), indices(A,1), indices(A,2))
+    JopNl(JetBlock(jets))
+end
+
+function Jets.JopBlock(A::DArray{T,2}) where {T<:JopLn}
+    jets = DArray(I->[jet(A[irow,icol]) for irow in I[1], icol in I[2]], procs(A), indices(A,1), indices(A,2))
+    JopLn(JetBlock(jets))
+end
 
 function Jets.JetBlock(jets::DArray{T,2}) where {T<:Jet}
     length(jets.cuts[2]) < 3 || error("Distributed support is across rows")
@@ -208,7 +219,7 @@ function Jets.point!(jet::Jet{D,R,typeof(JetDBlock_f!)}, mₒ::AbstractArray) wh
         nothing
     end
     @sync for pid in pids
-        @async remotecall_fetch(_point!, pid, sjet, _mₒ)
+        @async remotecall_fetch(_point!, pid, jets, _mₒ)
     end
     mₒ
 end
