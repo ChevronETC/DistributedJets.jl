@@ -119,6 +119,13 @@ end
 
     δd = rand(range(J))
     @test J'*δd ≈ _J'*collect(δd)
+
+    F₃₂ = getblock(JopNl,F,3,2)
+    G₃₂ = _G[3,2]
+    F₃₂*m[21:30] ≈ G₃₂*m[21:30]
+    A₁₄ = getblock(JopLn,F,1,4)
+    B₁₄ = _G[1,4]
+    A₁₄*m[31:40] ≈ B₁₄*m[31:40]
 end
 
 @testset "JopDBlock, homogeneous" begin
@@ -154,3 +161,5 @@ end
     δd = rand(range(J))
     @test J'*δd ≈ _J'*collect(δd)
 end
+
+rmprocs(workers())
