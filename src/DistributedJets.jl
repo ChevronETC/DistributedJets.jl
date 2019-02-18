@@ -1,7 +1,7 @@
 module DistributedJets
 
 using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
-import Jets:JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint, df!, df′!, f!, point!
+import Jets:BlockArray, JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint, df!, df′!, f!, point!
 
 #
 # DArray extensions
@@ -46,7 +46,7 @@ Jets.indices(A::DArray{T}, i::Integer) where {T} = indices(A.cuts[i])
 #
 struct JetDSpace{T,S<:JetAbstractSpace{T,1}} <: JetAbstractSpace{T,1}
     blkspaces::DArray{S,1,Array{S,1}}
-    blkindices::DArray{UnitRange{Int},1,Array{UnitRange{Int},1}}
+    blkindices::Vector{UnitRange{Int}}
     indices::Vector{UnitRange{Int}}
 end
 
@@ -55,40 +55,59 @@ Base.eltype(R::Type{JetDSpace{T,S}}) where {T,S} = T
 Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
 Jets.indices(R::JetDSpace) = R.indices
 Distributed.procs(R::JetDSpace) = procs(R.blkspaces)
+Distributed.nprocs(R::JetDSpace) = length(procs(R.blkspaces))
 
 Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
 
-function blockproc(S::JetDSpace, iblock::Integer)
-    rngs = indices(S.blkspaces, 1)
-    S.blkspaces.pids[findfirst(rng->iblock∈rng, rngs)]
+struct DBArray{T,A<:AbstractArray{T}} <: AbstractArray{T,1}
+    darray::DArray{T,1,A}
+    blkindices::Vector{UnitRange{Int}}
 end
 
-function getblocklocal!(x, R, iblock, xblock)
-    for (i,j) in enumerate(R.blkindices[iblock])
-        xblock[i] = x[j]
-    end
-    xblock
-end
-getblocklocal(x::DArray, R::JetDSpace, iblock::Integer) = getblocklocal!(x, R, iblock, Array(space(R, iblock)))
-Jets.getblock!(x::DArray, R::JetDSpace, iblock::Integer, xblock::AbstractArray) = remotecall_fetch(getblocklocal!, blockproc(R, iblock), x, R, iblock, xblock)
-Jets.getblock(x::DArray, R::JetDSpace, iblock::Integer) = remotecall_fetch(getblocklocal, blockproc(R, iblock), x, R, iblock)
+Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
+Base.size(x::DBArray) = size(x.darray)
+Base.getindex(x::DBArray, i::Int) = x.darray[i]
+DistributedArrays.localpart(x::DBArray) = localpart(x.darray)
+Distributed.procs(x::DBArray) = procs(x.darray)
+Jets.nblocks(x::DBArray) = x.blkindices[end][end]
 
-function Jets.setblock!(x::DArray, R::JetDSpace, iblock::Integer, xblock::AbstractArray)
-    function _block!(x, R, iblock, xblock)
-        j0 = localindices(x)[1][1]
-        _x = localpart(x)
-        for (i,j) in enumerate(R.blkindices[iblock])
-            _x[j-j0+1] = xblock[i]
-        end
-        nothing
-    end
-    remotecall_fetch(_block!, blockproc(R, iblock), x, R, iblock, xblock)
+# I'm begin lazy here... probably better to figure out how to use broadcasting...
+Base.isapprox(x::DBArray, y::DBArray; kwargs...) = isapprox(x.darray, y.darray; kwargs...)
+Base.isapprox(x::DBArray, y::DArray; kwargs...) = isapprox(x.darray, y; kwargs...)
+Base.isapprox(x::DArray, y::DBArray; kwargs...) = isapprox(x, y.darray; kwargs...)
+
+#= TODO...
+function Base.collect(x::DBArray)
+    array = collect(x.darray)
+    indices = collect(x.)
+    BlockArray(collect(x.darray), x.indices)
+end
+=#
+# end of being lazy
+
+DistributedArrays.empty_localpart(T,N,::Type{A}) where {A<:BlockArray} = BlockArray([Array{T}(undef, ntuple(zero, N))], [0:0])
+for f in (:Array, :ones, :rand, :zeros)
+    @eval (Base.$f)(R::JetDSpace) = DBArray(DArray(i->($f)(localpart(R.blkspaces)[1]), procs(R), indices(R)), R.blkindices)
 end
 
-for f in (:ones, :rand, :zeros)
-    @eval (Base.$f)(R::JetDSpace{T}) where {T} = DArray(I->($f)(T, length(I[1])), procs(R), indices(R))
+getblocklocal(x::DBArray, δblock) = getblock(localpart(x), δblock)
+function Jets.getblock(x::DBArray{T,A}, iblock::Integer) where {T,B,A<:BlockArray{T,B}}
+    ipid = findfirst(rng->iblock∈rng, x.blkindices)
+    remotecall_fetch(getblocklocal, procs(x)[ipid], x, iblock - x.blkindices[ipid][1] + 1)::B
 end
-Base.Array(R::JetDSpace{T}) where {T} = DArray(I->Array{T,1}(undef, length(I[1])), procs(R), indices(R))
+function Jets.getblock!(x::DBArray{T,A}, iblock::Integer, xblock::AbstractArray) where {T,B,A<:BlockArray{T,B}}
+    ipid = findfirst(rng->iblock∈rng, x.blkindices)::Int
+    xblock .= remotecall_fetch(getblocklocal, procs(x)[ipid], x, iblock - x.blkindices[ipid][1] + 1)::B
+end
+
+function setblocklocal!(x::DBArray, δblock::Integer, xblock)
+    setblock!(localpart(x), δblock, xblock)
+    nothing
+end
+function Jets.setblock!(x::DBArray, iblock::Integer, xblock)
+    ipid = findfirst(rng->iblock∈rng, x.blkindices)::Int
+    remotecall_fetch(setblocklocal!, procs(x)[ipid], x, iblock - x.blkindices[ipid][1] + 1, xblock)
+end
 
 function Jets.JopBlock(A::DArray{T,2}) where {T<:Jop}
     jets = DArray(I->[jet(A[irow,icol]) for irow in I[1], icol in I[2]], procs(A), indices(A,1), indices(A,2))
@@ -113,40 +132,6 @@ function Jets.JetBlock(jets::DArray{T,2}) where {T<:Jet}
 
     pids = procs(jets)[:]
 
-    blkranges(jets) = DArray(I->[range(jets[i]) for i in I[1]], pids, indices(jets, 1))
-    blkspaces = blkranges(jets)
-
-    counts = zeros(Int, length(pids))
-    _count(spaces) = mapreduce(length, +, localpart(spaces))
-    @sync for (i,pid) in enumerate(pids)
-        @async begin
-            counts[i] = remotecall_fetch(_count, pid, blkspaces)
-        end
-    end
-    idxs = Vector{UnitRange{Int}}(undef, length(pids))
-    lst = 0
-    for i = 1:length(idxs)
-        frst = lst + 1
-        lst = frst + counts[i] - 1
-        idxs[i] = frst:lst
-    end
-
-    blkidxs = DArray(I->[0:0 for i in I[1]], pids, indices(jets, 1))
-    function _blkidxs!(_blkidxs, _blkspaces, firstindex)
-        lst = firstindex - 1
-        for (i,idx) in enumerate(localindices(_blkidxs)[1])
-            frst = lst + 1
-            lst = frst + length(_blkspaces[idx]) - 1
-            localpart(_blkidxs)[i] = frst:lst
-        end
-        nothing
-    end
-    @sync for (ipid,pid) in enumerate(pids)
-        @async remotecall_fetch(_blkidxs!, pid, blkidxs, blkspaces, idxs[ipid][1])
-    end
-
-    rng = JetDSpace(blkspaces, blkidxs, idxs)
-
     function build(I, jets)
         irng = indices(jets, 1)[I[1][1]]
         jrng = indices(jets, 2)[I[2][1]]
@@ -154,9 +139,38 @@ function Jets.JetBlock(jets::DArray{T,2}) where {T<:Jet}
         [JetBlock(_jets) for k=1:1, l=1:1]
     end
     n1,n2 = length(indices(jets, 1)),length(indices(jets, 2))
-    _jets = DArray(I->build(I, jets), (n1,n2), procs(jets), [n1,n2])
+    _jets = DArray(I->build(I, jets), (n1,n2), pids, [n1,n2])
 
-    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!, s = (jets=_jets, blockmap=indices(jets, 1)))
+    blkspaces = DArray(I->[range(localpart(_jets)[1]) for i=1:1], (n1,), pids, [n1])
+
+    countidxs = zeros(Int, n1)
+    countblks = zeros(Int, n1)
+    _countidxs(spaces) = length(localpart(spaces)[1])
+    _countblks(spaces) = nblocks(localpart(spaces)[1])
+    @sync for (i,pid) in enumerate(pids)
+        @async begin
+            countidxs[i] = remotecall_fetch(_countidxs, pid, blkspaces)
+            countblks[i] = remotecall_fetch(_countblks, pid, blkspaces)
+        end
+    end
+    idxs = Vector{UnitRange{Int}}(undef, length(pids))
+    lst = 0
+    for i = 1:length(idxs)
+        frst = lst + 1
+        lst = frst + countidxs[i] - 1
+        idxs[i] = frst:lst
+    end
+    blkidxs = Vector{UnitRange{Int}}(undef, length(pids))
+    lst = 0
+    for i = 1:length(idxs)
+        frst = lst + 1
+        lst = frst + countblks[i] - 1
+        blkidxs[i] = frst:lst
+    end
+
+    rng = JetDSpace(blkspaces, blkidxs, idxs)
+
+    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!, s = (jets=_jets, dom=dom, blockmap=indices(jets, 1)))
 end
 
 function addmasterpid(pids)
@@ -166,7 +180,7 @@ function addmasterpid(pids)
     pids
 end
 
-function JetDBlock_f!(d::DArray, m::AbstractArray; jets, kwargs...)
+function JetDBlock_f!(d::DBArray, m::AbstractArray; jets, kwargs...)
     pids = procs(jets)
     _m = bcast(m, addmasterpid(pids))
     function _f!(d, _m, jets)
@@ -180,7 +194,7 @@ function JetDBlock_f!(d::DArray, m::AbstractArray; jets, kwargs...)
     d
 end
 
-function JetDBlock_df!(d::DArray, m::AbstractArray; jets, kwargs...)
+function JetDBlock_df!(d::DBArray, m::AbstractArray; jets, kwargs...)
     pids = procs(jets)
     _m = bcast(m, addmasterpid(pids))
     function _df!(d, _m, jets)
@@ -194,11 +208,14 @@ function JetDBlock_df!(d::DArray, m::AbstractArray; jets, kwargs...)
     d
 end
 
-function JetDBlock_df′!(m::AbstractArray, d::DArray; jets, kwargs...)
+function JetDBlock_df′!(m::AbstractArray, d::DBArray; jets, dom, kwargs...)
     pids = procs(jets)
-    _m = ArrayFutures(m, addmasterpid(pids))
+    _m = TypeFutures(m, zeros, dom)
+#    _m = ArrayFutures(m, addmasterpid(pids))
     function _df′!(_m, d, jets)
         jet = localpart(jets)[1]
+        @show size(localpart(_m))
+        @show typeof(localpart(_m))
         df′!(localpart(_m), jet, localpart(d); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
     end
@@ -226,8 +243,15 @@ end
 
 Distributed.procs(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}) where {D<:JetAbstractSpace, R<:JetAbstractSpace} = procs(state(A).jets)
 
-Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R}= size(state(jet).jets)
-Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R} = size(state(jet).jets, i)
+function Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R}
+    if i == 1 # range
+        S = range(jet)
+        return S.blkindices[end]
+    end
+    S = domain(jet)
+    S.blkindices[end]
+end
+Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where{D,R} = (nblocks(jet, 1),nblocks(jet, 2))
 Jets.nblocks(A::Jop{T}) where {T<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlock_f!)}} = nblocks(jet(A))
 Jets.nblocks(A::Jop{T}, i::Integer) where {T<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlock_f!)}} = nblocks(jet(A), i)
 
