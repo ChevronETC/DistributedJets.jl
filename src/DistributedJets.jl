@@ -53,13 +53,15 @@ end
 Base.size(R::JetDSpace) = (R.indices[end][end],)
 Base.eltype(R::Type{JetDSpace{T,S}}) where {T,S} = T
 Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
+
 Jets.indices(R::JetDSpace) = R.indices
+Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
+Jets.nblocks(R::JetDSpace) = R.blkindices[end][end]
+
 Distributed.procs(R::JetDSpace) = procs(R.blkspaces)
 Distributed.nprocs(R::JetDSpace) = length(procs(R.blkspaces))
 
-Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
-
-struct DBArray{T,A<:AbstractArray{T}} <: AbstractArray{T,1}
+struct DBArray{T,A<:BlockArray{T}} <: AbstractArray{T,1}
     darray::DArray{T,1,A}
     blkindices::Vector{UnitRange{Int}}
 end
@@ -67,6 +69,7 @@ end
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
 Base.size(x::DBArray) = size(x.darray)
 Base.getindex(x::DBArray, i::Int) = x.darray[i]
+
 DistributedArrays.localpart(x::DBArray) = localpart(x.darray)
 Distributed.procs(x::DBArray) = procs(x.darray)
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
@@ -76,13 +79,23 @@ Base.isapprox(x::DBArray, y::DBArray; kwargs...) = isapprox(x.darray, y.darray; 
 Base.isapprox(x::DBArray, y::DArray; kwargs...) = isapprox(x.darray, y; kwargs...)
 Base.isapprox(x::DArray, y::DBArray; kwargs...) = isapprox(x, y.darray; kwargs...)
 
-#= TODO...
-function Base.collect(x::DBArray)
-    array = collect(x.darray)
-    indices = collect(x.)
-    BlockArray(collect(x.darray), x.indices)
+function Base.collect(x::DBArray{T,A}) where {T,A}
+    _x = A[]
+    _indices = UnitRange{Int}[]
+    n = 0
+    for pid in procs(x)
+        y = remotecall_fetch(localpart, pid, x.darray)
+        _x = [_x; y.arrays]
+        for i = 1:length(y.indices)
+            push!(_indices, ((n+y.indices[i][1]):(n+y.indices[i][end])))
+        end
+        n = _indices[end][end]
+    end
+    BlockArray(_x, _indices)
 end
-=#
+
+Base.convert(::BlockArray, x::DBArray) = collect(x)
+Base.convert(::Array, x::DBArray) = convert(Array, collect(x))
 # end of being lazy
 
 DistributedArrays.empty_localpart(T,N,::Type{A}) where {A<:BlockArray} = BlockArray([Array{T}(undef, ntuple(zero, N))], [0:0])
@@ -211,11 +224,8 @@ end
 function JetDBlock_df′!(m::AbstractArray, d::DBArray; jets, dom, kwargs...)
     pids = procs(jets)
     _m = TypeFutures(m, zeros, dom)
-#    _m = ArrayFutures(m, addmasterpid(pids))
     function _df′!(_m, d, jets)
         jet = localpart(jets)[1]
-        @show size(localpart(_m))
-        @show typeof(localpart(_m))
         df′!(localpart(_m), jet, localpart(d); jets=state(jet).jets, dom=domain(jet), rng=range(jet))
         nothing
     end
@@ -238,7 +248,7 @@ function Jets.point!(jet::Jet{D,R,typeof(JetDBlock_f!)}, mₒ::AbstractArray) wh
     @sync for pid in pids
         @async remotecall_fetch(_point!, pid, jets, _mₒ)
     end
-    mₒ
+    jet
 end
 
 Distributed.procs(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}) where {D<:JetAbstractSpace, R<:JetAbstractSpace} = procs(state(A).jets)
@@ -246,12 +256,12 @@ Distributed.procs(A::Jop{Jet{D,R,typeof(JetDBlock_f!)}}) where {D<:JetAbstractSp
 function Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R}
     if i == 1 # range
         S = range(jet)
-        return S.blkindices[end]
+        return S.blkindices[end][end]
     end
     S = domain(jet)
-    S.blkindices[end]
+    S.blkindices[end][end]
 end
-Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where{D,R} = (nblocks(jet, 1),nblocks(jet, 2))
+Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where {D<:JetAbstractSpace, R<:JetAbstractSpace} = (nblocks(jet, 1), nblocks(jet, 2))
 Jets.nblocks(A::Jop{T}) where {T<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlock_f!)}} = nblocks(jet(A))
 Jets.nblocks(A::Jop{T}, i::Integer) where {T<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlock_f!)}} = nblocks(jet(A), i)
 
@@ -261,10 +271,8 @@ function Jets.getblock(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer, j::Intege
     ipid = findfirst(rng->i∈rng, blockmap)
     pid = procs(jets)[ipid]
 
-    function _getblock(jets, i, j, ipid, blockmap)
-        state(localpart(jets)[1]).jets[i - blockmap[ipid][1] + 1,j]
-    end
-    remotecall_fetch(_getblock, pid, jets, i, j, ipid, blockmap)
+    _getblock(jets, δi, j) = state(localpart(jets)[1]).jets[δi,j]
+    remotecall_fetch(_getblock, pid, jets, i - blockmap[ipid][1] + 1, j)
 end
 
 Jets.getblock(A::JopLn{T}, i::Integer, j::Integer) where {T<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlock_f!)}} = JopLn(getblock(jet(A), i, j))
