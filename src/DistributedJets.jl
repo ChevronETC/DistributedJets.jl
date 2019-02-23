@@ -1,7 +1,7 @@
 module DistributedJets
 
 using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
-import Jets:BlockArray, JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint, df!, df′!, f!, point!
+import Jets:BlockArray, BlockArrayStyle, JetAbstractSpace, JetBSpace, JetBlock, JopAdjoint, df!, df′!, f!, point!
 
 #
 # DArray extensions
@@ -70,9 +70,44 @@ Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
 Base.size(x::DBArray) = size(x.darray)
 Base.getindex(x::DBArray, i::Int) = x.darray[i]
 
+function Base.similar(A::DBArray)
+    darray = DArray(I->similar(localpart(A)), (size(A,1),), procs(A)[:])
+    DBArray(darray, A.blkindices)
+end
+
 DistributedArrays.localpart(x::DBArray) = localpart(x.darray)
 Distributed.procs(x::DBArray) = procs(x.darray)
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
+
+# minimal broadcasting implementation --<
+struct DBArrayStyle <: Broadcast.AbstractArrayStyle{1} end
+Base.BroadcastStyle(::Type{<:DBArray}) = DBArrayStyle()
+DBArrayStyle(::Val{1}) = DBArrayStyle()
+
+function Base.similar(bc::Broadcast.Broadcasted{DBArrayStyle}, ::Type{T}) where {S,T}
+    A = find_dbarray(bc)
+    similar(A)
+end
+find_dbarray(bc::Broadcast.Broadcasted) = find_dbarray(bc.args)
+find_dbarray(args::Tuple) = find_dbarray(find_dbarray(args[1]), Base.tail(args))
+find_dbarray(x) = x
+find_dbarray(a::DBArray, rest) = a
+find_dbarray(::Any, rest) = find_dbarray(rest)
+
+DistributedArrays.localpart(bc::Broadcast.Broadcasted{DBArrayStyle}) = Broadcast.Broadcasted{BlockArrayStyle}(bc.f, map(arg->localpart(arg), bc.args))
+
+function Base.copyto!(dest::DBArray, bc::Broadcast.Broadcasted{DBArrayStyle})
+    function _copyto!(dest, bc)
+        _bc = localpart(bc)
+        copyto!(localpart(dest), localpart(bc))
+        nothing
+    end
+    @sync for pid in procs(dest)
+        @async remotecall_fetch(_copyto!, pid, dest, bc)
+    end
+    dest
+end
+# -->
 
 # I'm begin lazy here... probably better to figure out how to use broadcasting...
 Base.isapprox(x::DBArray, y::DBArray; kwargs...) = isapprox(x.darray, y.darray; kwargs...)
