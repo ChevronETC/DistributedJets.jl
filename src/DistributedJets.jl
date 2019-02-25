@@ -68,10 +68,12 @@ end
 
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
 Base.size(x::DBArray) = size(x.darray)
-Base.getindex(x::DBArray, i::Int) = x.darray[i]
+Jets.indices(x::DBArray, i::Integer) = indices(x.darray, i)
+
+Base.getindex(x::DBArray, i::Int) = getindex(x.darray, i)
 
 function Base.similar(A::DBArray)
-    darray = DArray(I->similar(localpart(A)), (size(A,1),), procs(A)[:])
+    darray = DArray(I->similar(localpart(A)), procs(A)[:], indices(A, 1))
     DBArray(darray, A.blkindices)
 end
 
