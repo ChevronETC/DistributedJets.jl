@@ -75,6 +75,28 @@ end
     remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π,π]
 end
 
+@testset "DBArray broadcasting" begin
+    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (7,1), workers(), [2,1])
+    R = range(A)
+    R.blkindices
+    R.blkspaces[1]
+    d₁ = ones(R)
+    d₂ = ones(R)
+    d₃ = ones(R)
+    d = ones(R)
+
+    α₁ = rand(Float64)
+    α₂ = rand(Float64)
+    α₃ = rand(Float64)
+
+    d .= α₁*d₁ .+ α₂*d₂ .+ α₃*d₃
+    α = α₁ + α₂ + α₃
+
+    for i = 1:length(d)
+        @test d[i] ≈ α
+    end
+end
+
 @everywhere function myblocks(i,j)
     if i ∈ (1,2,3) && j ∈ (2,3,1)
         return JopBar(10)
