@@ -66,6 +66,7 @@ struct DBArray{T,A<:BlockArray{T}} <: AbstractArray{T,1}
     blkindices::Vector{UnitRange{Int}}
 end
 
+# DBArray Array array interface implementation <--
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
 Base.size(x::DBArray) = size(x.darray)
 Jets.indices(x::DBArray, i::Integer) = indices(x.darray, i)
@@ -81,7 +82,26 @@ DistributedArrays.localpart(x::DBArray) = localpart(x.darray)
 Distributed.procs(x::DBArray) = procs(x.darray)
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
 
-# minimal broadcasting implementation --<
+function Base.collect(x::DBArray{T,A}) where {T,A}
+    _x = A[]
+    _indices = UnitRange{Int}[]
+    n = 0
+    for pid in procs(x)
+        y = remotecall_fetch(localpart, pid, x.darray)
+        _x = [_x; y.arrays]
+        for i = 1:length(y.indices)
+            push!(_indices, ((n+y.indices[i][1]):(n+y.indices[i][end])))
+        end
+        n = _indices[end][end]
+    end
+    BlockArray(_x, _indices)
+end
+
+Base.convert(::BlockArray, x::DBArray) = collect(x)
+Base.convert(::Array, x::DBArray) = convert(Array, collect(x))
+# -->
+
+# DBArray broadcasting implementation --<
 struct DBArrayStyle <: Broadcast.AbstractArrayStyle{1} end
 Base.BroadcastStyle(::Type{<:DBArray}) = DBArrayStyle()
 DBArrayStyle(::Val{1}) = DBArrayStyle()
@@ -110,30 +130,6 @@ function Base.copyto!(dest::DBArray, bc::Broadcast.Broadcasted{DBArrayStyle})
     dest
 end
 # -->
-
-# I'm begin lazy here... probably better to figure out how to use broadcasting...
-Base.isapprox(x::DBArray, y::DBArray; kwargs...) = isapprox(x.darray, y.darray; kwargs...)
-Base.isapprox(x::DBArray, y::DArray; kwargs...) = isapprox(x.darray, y; kwargs...)
-Base.isapprox(x::DArray, y::DBArray; kwargs...) = isapprox(x, y.darray; kwargs...)
-
-function Base.collect(x::DBArray{T,A}) where {T,A}
-    _x = A[]
-    _indices = UnitRange{Int}[]
-    n = 0
-    for pid in procs(x)
-        y = remotecall_fetch(localpart, pid, x.darray)
-        _x = [_x; y.arrays]
-        for i = 1:length(y.indices)
-            push!(_indices, ((n+y.indices[i][1]):(n+y.indices[i][end])))
-        end
-        n = _indices[end][end]
-    end
-    BlockArray(_x, _indices)
-end
-
-Base.convert(::BlockArray, x::DBArray) = collect(x)
-Base.convert(::Array, x::DBArray) = convert(Array, collect(x))
-# end of being lazy
 
 DistributedArrays.empty_localpart(T,N,::Type{A}) where {A<:BlockArray} = BlockArray([Array{T}(undef, ntuple(zero, N))], [0:0])
 for f in (:Array, :ones, :rand, :zeros)
