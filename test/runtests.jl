@@ -72,7 +72,7 @@ end
     setblock!(d,1,x)
     @test d[1:2] ≈ [π,π]
     x .= 0
-    remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π,π]
+    @test remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π,π]
 end
 
 @testset "DBArray broadcasting" begin
@@ -144,10 +144,10 @@ end
 
     F₃₂ = getblock(JopNl,F,3,2)
     G₃₂ = _G[3,2]
-    F₃₂*m[21:30] ≈ G₃₂*m[21:30]
+    @test F₃₂*m[21:30] ≈ G₃₂*m[21:30]
     A₁₄ = getblock(JopLn,F,1,4)
     B₁₄ = _G[1,4]
-    A₁₄*m[31:40] ≈ B₁₄*m[31:40]
+    @test A₁₄*m[31:40] ≈ B₁₄*m[31:40]
 end
 
 @testset "JopDBlock, homogeneous" begin
