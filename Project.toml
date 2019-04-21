@@ -1,0 +1,19 @@
+name = "DistributedJets"
+uuid = "5b65064a-1d0b-5b23-8760-570290dfee43"
+version = "0.0.0"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+DistributedArrays = "aaf54ef3-cdf8-58ed-94cc-d582ad619b94"
+Jets = "2a57b368-ab28-5ba9-84aa-637fe7991822"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ParallelOperations = "1b60ccb4-57e0-5af0-9a84-4a6fb2dffe34"
+
+[extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+PkgBenchmark = "32113eaa-f34f-5b0d-bd6c-c81e245fc73d"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
+benchmark = ["BenchmarkTools", "PkgBenchmark"]
