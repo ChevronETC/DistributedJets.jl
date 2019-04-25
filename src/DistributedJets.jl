@@ -1,6 +1,6 @@
 module DistributedJets
 
-using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
+using Distributed, DistributedArrays, JSON, Jets, LinearAlgebra, ParallelOperations, Statistics
 
 #
 # DArray extensions
@@ -242,7 +242,7 @@ end
 JetDBlock_countidxs(spaces) = length(localpart(spaces)[1])
 JetDBlock_countblks(spaces) = nblocks(localpart(spaces)[1])
 
-function Jets.JetBlock(ops::DArray{T,2}) where {T<:Jop}
+function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="", perfstatdelay=Inf) where {T<:Jop}
     length(ops.cuts[2]) < 3 || error("Distributed support is across rows")
 
     dom = remotecall_fetch(JetDBlock_domain, procs(ops)[1], ops)
@@ -279,7 +279,8 @@ function Jets.JetBlock(ops::DArray{T,2}) where {T<:Jop}
 
     rng = JetDSpace(blkspaces, blkidxs, idxs)
 
-    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!, s = (ops=_ops, dom=dom, blockmap=indices(ops, 1)))
+    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!,
+        s = (ops=_ops, dom=dom, blockmap=indices(ops, 1), perfstatfile=perfstatfile, perfstatdelay=perfstatdelay))
 end
 
 function addmasterpid(pids)
@@ -295,12 +296,19 @@ function JetDBlock_local_f!(d, _m, ops)
     nothing
 end
 
-function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, kwargs...)
+function _JetDBlock_f!(d::DBArray, m::AbstractArray, ops)
     pids = procs(ops)
     _m = bcast(m, addmasterpid(pids))
     @sync for pid in pids
         @async remotecall_fetch(JetDBlock_local_f!, pid, d, _m, ops)
     end
+    nothing
+end
+
+function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, perfstatfile, perfstatdelay, kwargs...)
+    computetask = @async _JetDBlock_f!(d, m, ops)
+    @async perfstat(ops, perfstatfile, perfstatdelay, computetask)
+    wait(computetask)
     d
 end
 
@@ -310,12 +318,19 @@ function JetDBlock_local_df!(d, _m, ops)
     nothing
 end
 
-function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, kwargs...)
+function _JetDBlock_df!(d::DBArray, m::AbstractArray, ops)
     pids = procs(ops)
     _m = bcast(m, addmasterpid(pids))
     @sync for pid in pids
         @async remotecall_fetch(JetDBlock_local_df!, pid, d, _m, ops)
     end
+    nothing
+end
+
+function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, perfstatfile, perfstatdelay, kwargs...)
+    computetask = @async _JetDBlock_df!(d, m, ops)
+    @async perfstat(ops, perfstatfile, perfstatdelay, computetask)
+    wait(computetask)
     d
 end
 
@@ -325,7 +340,7 @@ function JetDBlock_local_df′!(_m, d, ops)
     nothing
 end
 
-function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, kwargs...)
+function _JetDBlock_df′!(m::AbstractArray, d::DBArray, ops, dom)
     m .= 0
     pids = procs(ops)
     _m = TypeFutures(m, zeros, addmasterpid(pids), dom)
@@ -333,7 +348,43 @@ function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, kwargs...)
         @async remotecall_fetch(JetDBlock_local_df′!, pid, _m, d, ops)
     end
     reduce!(_m)
+    nothing
+end
+
+function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, perfstatfile, perfstatdelay, kwargs...)
+    computetask = @async _JetDBlock_df′!(m, d, ops, dom)
+    @async perfstat(ops, perfstatfile, perfstatdelay, computetask)
+    wait(computetask)
     m
+end
+
+function _perfstat(ops)
+    _ops = state(localpart(ops)[1]).ops
+    _s = [perfstat(_ops[iblkrow,iblkcol]) for iblkrow=1:size(_ops,1), iblkcol=1:size(_ops,2)][:]
+    Dict("id"=>myid(), "hostname"=>gethostname(), "values"=>_s)
+end
+
+function Jets.perfstat(ops, perfstatfile)
+    if perfstatfile != ""
+        pids = procs(ops)
+        s = Vector{Dict{String,Any}}(undef, length(pids))
+        @sync for (i, pid) in enumerate(procs(ops))
+            @async s[i] = remotecall_fetch(_perfstat, pid, ops)
+        end
+        write(perfstatfile, json(s, 1))
+    end
+    nothing
+end
+
+function Jets.perfstat(ops::DArray{T,2}, perfstatfile::AbstractString, perfstatdelay::Int, computetask::Task) where {T<:Jop}
+    while perfstatfile != ""
+        if istaskdone(computetask)
+            break
+        end
+        sleep(perfstatdelay)
+        perfstat(ops, perfstatfile)
+    end
+    nothing
 end
 
 function JetDBlock_local_point!(ops, _mₒ)

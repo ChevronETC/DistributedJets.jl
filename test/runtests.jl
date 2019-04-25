@@ -1,7 +1,7 @@
 using Distributed
 #Need to remove all procs before running these tests
 addprocs(2)
-@everywhere using DistributedArrays, DistributedJets, Jets, LinearAlgebra, Test
+@everywhere using DistributedArrays, DistributedJets, JSON, Jets, LinearAlgebra, Test
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
 @everywhere function JopFoo(diag)
@@ -9,12 +9,13 @@ addprocs(2)
     JopLn(;df! = JopFoo_df!, df′! = JopFoo_df!, dom = spc, rng = spc, s = (diagonal=diag,))
 end
 
-@everywhere JopBar_f!(d,m) = d .= m.^2
-@everywhere JopBar_df!(δd,δm;mₒ,kwargs...) = δd .= 2 .* mₒ .* δm
-@everywhere function JopBar(n)
+@everywhere JopBar_f!(d,m;asleep) = begin sleep(asleep); d .= m.^2 end
+@everywhere JopBar_df!(δd,δm;mₒ,asleep,kwargs...) = begin sleep(asleep); δd .= 2 .* mₒ .* δm end
+@everywhere function JopBar(n; asleep=0)
     spc = JetSpace(Float64, n)
-    JopNl(f! = JopBar_f!, df! = JopBar_df!, df′! = JopBar_df!, dom = spc, rng = spc)
+    JopNl(f! = JopBar_f!, df! = JopBar_df!, df′! = JopBar_df!, dom = spc, rng = spc, s=(asleep=asleep,))
 end
+@everywhere Jets.perfstat(J::T) where {D,R,T<:Jets.Jet{D,R,typeof(JopBar_f!)}} = Float64(π)
 
 @everywhere JopBaz_df!(d,m;A,kwargs...) = d .= A*m
 @everywhere JopBaz_df′!(m,d;A,kwargs...) = m .= A'*d
@@ -24,7 +25,7 @@ end
     JopLn(;df! = JopBaz_df!, df′! = JopBaz_df′!, dom = dom, rng = rng, s = (A=A,))
 end
 
-@testset "DArray irregular construction" for T in (Float32,Float64,Complex{Float32},Complex{Float64})
+@testset "DArray irregular construction, T=$T" for T in (Float32,Float64,Complex{Float32},Complex{Float64})
     A = DArray(I->myid()*ones(T,length(I[1]),length(I[2])), workers(), [1:2,3:10], [1:2])
     @test size(A) == (10,2)
     @test A.indices[1] == (1:2, 1:2)
@@ -339,6 +340,34 @@ end
     for jblock = 1:nblocks(JT,2), iblock = 1:nblocks(JT,1)
         @test isa(getblock(JT,iblock,jblock), JopAdjoint)
     end
+end
+
+@testset "JopDBlock, statistics reporting" begin
+    _F = DArray(I->[JopBar(10;asleep=2) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+    F = @blockop _F perfstatfile="stats.json" perfstatdelay=1
+
+    m = rand(domain(F))
+    d = F*m
+
+    s = JSON.parse(read("stats.json", String))
+    rm("stats.json", force=true)
+    @test s[1]["values"] ≈ π*ones(8)
+    @test s[2]["values"] ≈ π*ones(4)
+
+    J = jacobian(F, m)
+    d = J*m
+
+    s = JSON.parse(read("stats.json", String))
+    rm("stats.json", force=true)
+    @test s[1]["values"] ≈ π*ones(8)
+    @test s[2]["values"] ≈ π*ones(4)
+
+    m = J'*d
+
+    s = JSON.parse(read("stats.json", String))
+    rm("stats.json", force=true)
+    @test s[1]["values"] ≈ π*ones(8)
+    @test s[2]["values"] ≈ π*ones(4)
 end
 
 rmprocs(workers())
