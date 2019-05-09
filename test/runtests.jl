@@ -113,10 +113,17 @@ end
     _F = DArray(I->[myblocks(i,j) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
     F = @blockop _F
 
+    @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    F₁ = remotecall_fetch(localpart, workers()[1], F)
+    F₂ = remotecall_fetch(localpart, workers()[2], F)
+
+    @test isa(F₁, JopNl{<:Jet{<:Jets.JetBSpace,<:Jets.JetBSpace,typeof(Jets.JetBlock_f!)}})
+
     _G = [_F[i,j] for i in 1:3, j in 1:4]
     G = @blockop _G
 
-    @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+    @test procs(F) == procs(state(F).ops)
 
     @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
     @test ones(domain(F)) ≈ ones(40)
@@ -132,6 +139,7 @@ end
 
     m = rand(domain(F))
     @test collect(F*m) ≈ G*m
+    @test collect(F*m) ≈ [F₁*m ; F₂*m]
 
     J = jacobian(F, m)
     _J = jacobian(G, m)
