@@ -4,7 +4,7 @@ addprocs(2)
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
 @everywhere function JopFoo(diag)
-    spc = JetSpace(Float64, length(diag))
+    spc = JetSpace(Float64, size(diag))
     JopLn(;df! = JopFoo_df!, df′! = JopFoo_df!, dom = spc, rng = spc, s = (diagonal=diag,))
 end
 
@@ -39,7 +39,7 @@ end
     @test indices(A,1) == [1:2,3:10]
 end
 
-@testset "JetDSpace construction" begin
+@testset "JetDSpace construction, 1D arrays" begin
     A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
     R = range(A)
     @test size(R) == (4,)
@@ -52,7 +52,20 @@ end
     @test nblocks(R) == 2
 end
 
-@testset "JetDSpace operations" begin
+@testset "JetDSpace construction, 2D arrays" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (2,1))
+    R = range(A)
+    @test size(R) == (12,)
+    @test length(R) == 12
+    @test eltype(R) == Float64
+    @test eltype(typeof(R)) == Float64
+    @test ndims(R) == 1
+    @test indices(R) == [1:6,7:12]
+    @test procs(R) == workers()
+    @test nblocks(R) == 2
+end
+
+@testset "JetDSpace operations, 1D arrays" begin
     A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
     R = range(A)
     @test dzeros(4) ≈ zeros(R)
@@ -75,7 +88,30 @@ end
     @test remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π,π]
 end
 
-@testset "DBArray broadcasting" begin
+@testset "JetDSpace operations, 2D arrays" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    R = range(A)
+    @test dzeros(24) ≈ zeros(R)
+    @test dones(24) ≈ ones(R)
+    d = rand(R)
+    _d = drand(24)
+    @test size(d) == size(_d)
+    @test d.darray.cuts == _d.cuts
+    @test d.darray.indices == _d.indices
+    d = Array(R)
+    @test size(d) == size(_d)
+    @test d.darray.cuts == _d.cuts
+    @test d.darray.indices == _d.indices
+
+    x = getblock(d,1)
+    x .= π
+    setblock!(d,1,x)
+    @test d[1:6] ≈ [π, π, π, π, π, π]
+    x .= 0
+    @test remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π π π; π π π]
+end
+
+@testset "DBArray broadcasting, 1D arrays" begin
     A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (7,1), workers(), [2,1])
     R = range(A)
     R.blkindices
@@ -88,6 +124,32 @@ end
     α₁ = rand(Float64)
     α₂ = rand(Float64)
     α₃ = rand(Float64)
+
+    d = α₃*d₃
+
+    d .= α₁*d₁ .+ α₂*d₂ .+ α₃*d₃
+    α = α₁ + α₂ + α₃
+
+    for i = 1:length(d)
+        @test d[i] ≈ α
+    end
+end
+
+@testset "DBArray broadcasting, 2D arrays" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (7,1), workers(), [2,1])
+    R = range(A)
+    R.blkindices
+    R.blkspaces[1]
+    d₁ = ones(R)
+    d₂ = ones(R)
+    d₃ = ones(R)
+    d = ones(R)
+
+    α₁ = rand(Float64)
+    α₂ = rand(Float64)
+    α₃ = rand(Float64)
+
+    d = α₃*d₃
 
     d .= α₁*d₁ .+ α₂*d₂ .+ α₃*d₃
     α = α₁ + α₂ + α₃
@@ -138,6 +200,7 @@ end
     @test x.darray.cuts == [[1,21,31]]
 
     m = rand(domain(F))
+
     @test collect(F*m) ≈ G*m
     @test collect(F*m) ≈ [F₁*m ; F₂*m]
 

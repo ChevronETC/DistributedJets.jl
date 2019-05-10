@@ -60,24 +60,33 @@ Jets.nblocks(R::JetDSpace) = R.blkindices[end][end]
 Distributed.procs(R::JetDSpace) = procs(R.blkspaces)
 Distributed.nprocs(R::JetDSpace) = length(procs(R.blkspaces))
 
-struct DBArray{T,A<:Jets.BlockArray{T}} <: AbstractArray{T,1}
-    darray::DArray{T,1,A}
+struct DBArray{T,A<:Jets.BlockArray{T},B} <: AbstractArray{T,1}
+    darray::DArray{A,1,B}
+    indices::Vector{UnitRange{Int}}
     blkindices::Vector{UnitRange{Int}}
 end
 
 # DBArray Array array interface implementation <--
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
-Base.size(x::DBArray) = size(x.darray)
+Base.size(x::DBArray) = (x.indices[end][end],)
 Jets.indices(x::DBArray, i::Integer) = indices(x.darray, i)
 
-Base.getindex(x::DBArray, i::Int) = getindex(x.darray, i)
+function Base.getindex(x::DBArray, i::Int)
+    ipid = findfirst(rng->i∈rng, x.indices)::Int
+    pid = procs(x)[ipid]
+    iₒ = x.indices[ipid][1]
 
-function Base.similar(A::DBArray)
-    darray = DArray(I->similar(localpart(A)), procs(A)[:], indices(A, 1))
-    DBArray(darray, A.blkindices)
+    _getindex(x, j) = getindex(localpart(x), j)
+    remotecall_fetch(_getindex, pid, x, i-iₒ+1)
 end
 
-DistributedArrays.localpart(x::DBArray) = localpart(x.darray)
+function Base.similar(x::DBArray)
+    darray = DArray(I->[similar(localpart(x))], procs(x)[:], indices(x, 1))
+    DBArray(darray, x.indices, x.blkindices)
+end
+
+_localpart(x::DBArray) = localpart(x.darray)
+DistributedArrays.localpart(x::DBArray) = _localpart(x)[1]::Jets.BlockArray
 Distributed.procs(x::DBArray) = procs(x.darray)
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
 
@@ -86,7 +95,7 @@ function Base.collect(x::DBArray{T,A}) where {T,A}
     _indices = UnitRange{Int}[]
     n = 0
     for pid in procs(x)
-        y = remotecall_fetch(localpart, pid, x.darray)
+        y = remotecall_fetch(localpart, pid, x)
         _x = [_x; y.arrays]
         for i = 1:length(y.indices)
             push!(_indices, ((n+y.indices[i][1]):(n+y.indices[i][end])))
@@ -119,7 +128,6 @@ DistributedArrays.localpart(bc::Broadcast.Broadcasted{DBArrayStyle}) = Broadcast
 
 function Base.copyto!(dest::DBArray, bc::Broadcast.Broadcasted{DBArrayStyle})
     function _copyto!(dest, bc)
-        _bc = localpart(bc)
         copyto!(localpart(dest), localpart(bc))
         nothing
     end
@@ -130,9 +138,9 @@ function Base.copyto!(dest::DBArray, bc::Broadcast.Broadcasted{DBArrayStyle})
 end
 # -->
 
-DistributedArrays.empty_localpart(T,N,::Type{A}) where {A<:Jets.BlockArray} = Jets.BlockArray([Array{T}(undef, ntuple(zero, N))], [0:0])
+DistributedArrays.empty_localpart(T,N,::Type{A}) where {B<:Jets.BlockArray,A<:Vector{B}} = Jets.BlockArray([Array{T}(undef, ntuple(zero, N))], [0:0])
 for f in (:Array, :ones, :rand, :zeros)
-    @eval (Base.$f)(R::JetDSpace) = DBArray(DArray(i->($f)(localpart(R.blkspaces)[1]), procs(R), indices(R)), R.blkindices)
+    @eval (Base.$f)(R::JetDSpace) = DBArray(DArray(i->[($f)(localpart(R.blkspaces)[1])], procs(R), indices(R)), R.indices, R.blkindices)
 end
 
 getblocklocal(x::DBArray, δblock) = getblock(localpart(x), δblock)
