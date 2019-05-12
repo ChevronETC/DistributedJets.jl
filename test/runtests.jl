@@ -1,6 +1,6 @@
 using Distributed
 addprocs(2)
-@everywhere using DistributedArrays, DistributedJets, Jets, Test
+@everywhere using DistributedArrays, DistributedJets, Jets, LinearAlgebra, Test
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
 @everywhere function JopFoo(diag)
@@ -109,6 +109,19 @@ end
     @test d[1:6] ≈ [π, π, π, π, π, π]
     x .= 0
     @test remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π π π; π π π]
+end
+
+@testset "DBArray, inner product" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d₁ = rand(range(A))
+    d₂ = rand(range(A))
+    @test dot(d₁, d₂) ≈ dot(convert(Array, d₁), convert(Array, d₂))
+end
+
+@testset "DBArray, norm" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    @test norm(d) ≈ norm(convert(Array, d))
 end
 
 @testset "DBArray broadcasting, 1D arrays" begin
