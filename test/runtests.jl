@@ -217,8 +217,8 @@ end
     @test collect(F*m) ≈ G*m
     @test collect(F*m) ≈ [F₁*m ; F₂*m]
 
-    J = jacobian(F, m)
-    _J = jacobian(G, m)
+    J = jacobian!(F, m)
+    _J = jacobian!(G, m)
 
     δm = rand(domain(J))
     @test collect(J*δm) ≈ _J*δm
@@ -258,8 +258,8 @@ end
     m = rand(domain(F))
     @test collect(F*m) ≈ G*m
 
-    J = jacobian(F, m)
-    _J = jacobian(G, m)
+    J = jacobian!(F, m)
+    _J = jacobian!(G, m)
 
     δm = rand(domain(J))
     @test collect(J*δm) ≈ _J*δm
