@@ -188,6 +188,10 @@ end
     _F = DArray(I->[myblocks(i,j) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
     F = @blockop _F
 
+    @test nblocks(F,1) == 3
+    @test nblocks(F,2) == 4
+    @test nblocks(F) == (3,4)
+
     @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
 
     F₁ = remotecall_fetch(localpart, workers()[1], F)

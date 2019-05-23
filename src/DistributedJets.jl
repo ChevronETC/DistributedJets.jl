@@ -320,18 +320,6 @@ end
 
 Distributed.procs(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = procs(state(A).ops)
 
-function Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R}
-    if i == 1 # range
-        S = range(jet)
-        return S.blkindices[end][end]
-    end
-    S = domain(jet)
-    S.blkindices[end][end]
-end
-Jets.nblocks(jet::Jet{D,R,typeof(JetDBlock_f!)}) where {D<:Jets.JetAbstractSpace, R<:Jets.JetAbstractSpace} = (nblocks(jet, 1), nblocks(jet, 2))
-Jets.nblocks(A::Jop{T}) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = nblocks(jet(A))
-Jets.nblocks(A::Jop{T}, i::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = nblocks(jet(A), i)
-
 DistributedArrays.localpart(j::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R} = jet(localpart(state(j).ops)[1])
 DistributedArrays.localpart(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localpart(state(A).ops)[1]
 
