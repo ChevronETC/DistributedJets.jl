@@ -293,8 +293,9 @@ function JetDBlock_local_df′!(_m, d, ops)
 end
 
 function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, kwargs...)
+    m .= 0
     pids = procs(ops)
-    _m = TypeFutures(m, zeros, dom)
+    _m = TypeFutures(m, zeros, addmasterpid(pids), dom)
     @sync for pid in pids
         @async remotecall_fetch(JetDBlock_local_df′!, pid, _m, d, ops)
     end
