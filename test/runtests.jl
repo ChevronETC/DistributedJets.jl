@@ -122,6 +122,8 @@ end
     A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
     d = rand(range(A))
     @test norm(d) ≈ norm(convert(Array, d))
+    @test norm(d, 0) ≈ norm(convert(Array, d), 0)
+    @test norm(d, Inf) ≈ norm(convert(Array, d), Inf)
 end
 
 @testset "DBArray broadcasting, 1D arrays" begin

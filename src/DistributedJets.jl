@@ -92,10 +92,16 @@ function LinearAlgebra.norm(x::DBArray{T}, p::Real=2) where {T}
     z = zeros(T, length(pids))
     @sync for (ipid,pid) in enumerate(pids)
         @async begin
-            z[ipid] = (remotecall_fetch(DBArray_local_norm, pid, x, p)::real(T))^p
+            z[ipid] = remotecall_fetch(DBArray_local_norm, pid, x, p)::real(T)
         end
     end
-    sum(z)^(1/p)
+    if p == Inf
+        reduce(max, z)
+    elseif p == 0
+        sum(z)
+    else
+        mapreduce(_z->_z^p, +, z)^(one(T)/p)
+    end
 end
 
 DBArray_local_dot(x::DBArray, y::DBArray) = dot(localpart(x), localpart(y))
