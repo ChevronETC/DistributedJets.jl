@@ -80,10 +80,11 @@ function Base.getindex(x::DBArray, i::Int)
     remotecall_fetch(DBArray_local_getindex, pid, x, i-iₒ+1)
 end
 
-function Base.similar(x::DBArray)
-    darray = DArray(I->[similar(localpart(x))], procs(x)[:], indices(x, 1))
+function Base.similar(x::DBArray, ::Type{T}) where {T}
+    darray = DArray(I->[similar(localpart(x), T)], procs(x)[:], indices(x, 1))
     DBArray(darray, x.indices, x.blkindices)
 end
+Base.similar(x::DBArray{T}) where {T} = similar(x, T)
 
 DBArray_local_norm(x::DBArray, p) = norm(localpart(x), p)
 
@@ -100,7 +101,8 @@ function LinearAlgebra.norm(x::DBArray{T}, p::Real=2) where {T}
     elseif p == 0
         sum(z)
     else
-        mapreduce(_z->_z^p, +, z)^(one(T)/p)
+        _p = T(p)
+        mapreduce(_z->_z^_p, +, z)^(one(T)/_p)
     end
 end
 

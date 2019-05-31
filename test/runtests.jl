@@ -80,6 +80,11 @@ end
     @test d.darray.cuts == _d.cuts
     @test d.darray.indices == _d.indices
 
+    y = similar(d)
+    @test typeof(y) == DBArray{Float64}
+    z = similar(d, Float32)
+    @test typeof(z) == DBArray{Float32}
+
     x = getblock(d,1)
     x .= π
     setblock!(d,1,x)
@@ -124,6 +129,10 @@ end
     @test norm(d) ≈ norm(convert(Array, d))
     @test norm(d, 0) ≈ norm(convert(Array, d), 0)
     @test norm(d, Inf) ≈ norm(convert(Array, d), Inf)
+
+    _d = similar(d, Float32)
+    _d .= d
+    @test typeof(norm(_d, 0.5)) == Float32
 end
 
 @testset "DBArray broadcasting, 1D arrays" begin
