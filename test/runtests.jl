@@ -81,9 +81,9 @@ end
     @test d.darray.indices == _d.indices
 
     y = similar(d)
-    @test typeof(y) == DBArray{Float64}
+    @test isa(y, DistributedJets.DBArray{Float64})
     z = similar(d, Float32)
-    @test typeof(z) == DBArray{Float32}
+    @test isa(z, DistributedJets.DBArray{Float32})
 
     x = getblock(d,1)
     x .= π
