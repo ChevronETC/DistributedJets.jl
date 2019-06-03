@@ -89,7 +89,7 @@ Base.similar(x::DBArray{T}) where {T} = similar(x, T)
 DBArray_local_norm(x::DBArray, p) = norm(localpart(x), p)
 
 function LinearAlgebra.norm(x::DBArray{T}, p::Real=2) where {T}
-    _T = real(T)
+    _T = float(real(T))
     pids = procs(x)
     z = zeros(_T, length(pids))
     @sync for (ipid,pid) in enumerate(pids)
@@ -99,7 +99,9 @@ function LinearAlgebra.norm(x::DBArray{T}, p::Real=2) where {T}
     end
     if p == Inf
         maximum(z)
-    elseif p == 0
+    elseif p == -Inf
+        minimum(z)
+    elseif p == 0 || p == 1
         sum(z)
     else
         _p = _T(p)
