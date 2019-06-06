@@ -125,6 +125,7 @@ end
 _localpart(x::DBArray) = localpart(x.darray)
 DistributedArrays.localpart(x::DBArray) = _localpart(x)[1]::Jets.BlockArray
 Distributed.procs(x::DBArray) = procs(x.darray)
+Distributed.nprocs(x::DBArray) = length(procs(x))
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
 
 function Base.collect(x::DBArray{T,A}) where {T,A}
@@ -331,6 +332,7 @@ function Jets.point!(j::Jet{D,R,typeof(JetDBlock_f!)}, mₒ::AbstractArray) wher
 end
 
 Distributed.procs(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = procs(state(A).ops)
+Distributed.nprocs(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = length(procs(A))
 
 DistributedArrays.localpart(j::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R} = jet(localpart(state(j).ops)[1])
 DistributedArrays.localpart(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localpart(state(A).ops)[1]

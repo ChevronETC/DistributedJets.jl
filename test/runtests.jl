@@ -1,4 +1,5 @@
 using Distributed
+#Need to remove all procs before running these tests
 addprocs(2)
 @everywhere using DistributedArrays, DistributedJets, Jets, LinearAlgebra, Test
 
@@ -49,6 +50,8 @@ end
     @test ndims(R) == 1
     @test indices(R) == [1:2,3:4]
     @test procs(R) == workers()
+    @test nprocs(R) == nworkers()
+    @test nprocs(A) == nworkers()
     @test nblocks(R) == 2
 end
 
@@ -62,6 +65,8 @@ end
     @test ndims(R) == 1
     @test indices(R) == [1:6,7:12]
     @test procs(R) == workers()
+    @test nprocs(R) == nworkers()
+    @test nprocs(A) == nworkers()
     @test nblocks(R) == 2
 end
 
