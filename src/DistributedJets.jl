@@ -56,6 +56,10 @@ Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
 Jets.indices(R::JetDSpace) = R.indices
 Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
 Jets.nblocks(R::JetDSpace) = R.blkindices[end][end]
+DistributedArrays.localindices(R::JetDSpace) = R.indices[findfirst(pid->pid==myid(), procs(R))]
+localblockindices(R::JetDSpace) = R.blkindices[findfirst(pid->pid==myid(), procs(R))]
+localblockindices(R::Jets.JetBSpace) = 1:length(R.indices)
+localblockindices(R::Jets.JetAbstractSpace) = 1:1
 
 Distributed.procs(R::JetDSpace) = procs(R.blkspaces)
 Distributed.nprocs(R::JetDSpace) = length(procs(R.blkspaces))
@@ -127,6 +131,8 @@ DistributedArrays.localpart(x::DBArray) = _localpart(x)[1]::Jets.BlockArray
 Distributed.procs(x::DBArray) = procs(x.darray)
 Distributed.nprocs(x::DBArray) = length(procs(x))
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
+DistributedArrays.localindices(x::DBArray) = x.indices[findfirst(ipid->ipid==myid(), procs(x))]
+localblockindices(x::DBArray) = x.blkindices[findfirst(ipid->ipid==myid(), procs(x))]
 
 function Base.collect(x::DBArray{T,A}) where {T,A}
     _x = A[]
@@ -337,6 +343,11 @@ Distributed.nprocs(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} 
 DistributedArrays.localpart(j::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R} = jet(localpart(state(j).ops)[1])
 DistributedArrays.localpart(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localpart(state(A).ops)[1]
 
+localblockindices(j::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R} = (localblockindices(range(j)), localblockindices(domain(j)))
+localblockindices(j::Jet{D,R,typeof(JetDBlock_f!)}, i) where {D,R} = i == 1 ? localblockindices(range(j)) : localblockindices(domain(j))
+localblockindices(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localblockindices(jet(A))
+localblockindices(A::T, i) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localblockindices(jet(A), i)
+
 JetDBlock_local_getblock(ops, δi, j) = state(localpart(ops)[1]).ops[δi,j]
 
 function Jets.getblock(op::Jop{T}, i::Integer, j::Integer) where {D,R,T<:Jet{D,R,typeof(JetDBlock_f!)}}
@@ -355,6 +366,6 @@ Jets.indices(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R} = indic
 Jets.indices(A::Jop{T}, i::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = indices(jet(A), i)
 Jets.indices(A::Jets.JopAdjoint{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) where {D,R} = indices(A.op, i == 1 ? 2 : 1)
 
-export blockproc
+export blockproc, localblockindices
 
 end

@@ -90,6 +90,11 @@ end
     z = similar(d, Float32)
     @test isa(z, DistributedJets.DBArray{Float32})
 
+    @test remotecall_fetch(localindices, workers()[1], R) == 1:2
+    @test remotecall_fetch(localindices, workers()[2], R) == 3:4
+    @test remotecall_fetch(localblockindices, workers()[1], R) == 1:1
+    @test remotecall_fetch(localblockindices, workers()[2], R) == 2:2
+
     x = getblock(d,1)
     x .= π
     setblock!(d,1,x)
@@ -112,6 +117,11 @@ end
     @test size(d) == size(_d)
     @test d.darray.cuts == _d.cuts
     @test d.darray.indices == _d.indices
+
+    @test remotecall_fetch(localindices, workers()[1], R) == 1:12
+    @test remotecall_fetch(localindices, workers()[2], R) == 13:24
+    @test remotecall_fetch(localblockindices, workers()[1], R) == 1:2
+    @test remotecall_fetch(localblockindices, workers()[2], R) == 3:4
 
     x = getblock(d,1)
     x .= π
@@ -212,6 +222,11 @@ end
 
     F₁ = remotecall_fetch(localpart, workers()[1], F)
     F₂ = remotecall_fetch(localpart, workers()[2], F)
+
+    @test remotecall_fetch(localblockindices, workers()[1], F) == (1:2,1:4)
+    @test remotecall_fetch(localblockindices, workers()[2], F) == (3:3,1:4)
+    @test remotecall_fetch(localblockindices, workers()[1], F, 1) == 1:2
+    @test remotecall_fetch(localblockindices, workers()[1], F, 2) == 1:4
 
     @test isa(F₁, JopNl{<:Jet{<:Jets.JetBSpace,<:Jets.JetBSpace,typeof(Jets.JetBlock_f!)}})
 
