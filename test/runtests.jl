@@ -316,6 +316,16 @@ end
     __J = @blockop [jacobian(JopBar(10), m[1:10]) jacobian(JopBar(10), m[11:20]) jacobian(JopBar(10), m[21:30]) jacobian(JopBar(10), m[31:40]);
            jacobian(JopBar(10), m[1:10]) jacobian(JopBar(10), m[11:20]) jacobian(JopBar(10), m[21:30]) jacobian(JopBar(10), m[31:40])]
     @test __J*m ≈ _J*m
+
+    JT = J'
+    _JT = remotecall_fetch(localpart, workers()[1], JT)
+
+    typeof(_JT)
+    getblock(JT, 1, 1)
+
+    for jblock = 1:nblocks(JT,2), iblock = 1:nblocks(JT,1)
+        @test isa(getblock(JT,iblock,jblock), JopAdjoint)
+    end
 end
 
 rmprocs(workers())
