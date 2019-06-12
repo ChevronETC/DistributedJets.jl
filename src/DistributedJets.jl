@@ -49,6 +49,21 @@ struct JetDSpace{T,S<:Jets.JetAbstractSpace{T,1}} <: Jets.JetAbstractSpace{T,1}
     indices::Vector{UnitRange{Int}}
 end
 
+function JetDSpace(blkspaces::DArray{S,1}) where {S<:JetBSpace}
+    blkₒ,iₒ = 1,1
+    blkindices = Vector{UnitRange{Int}}(undef, length(blkspaces))
+    indices = Vector{UnitRange{Int}}(undef, length(blkspaces))
+    for i = 1:length(blkspaces)
+        blkspacesᵢ = blkspaces[i]
+        blkindices[i] = blkₒ:(blkₒ+nblocks(blkspacesᵢ)-1)
+        indices[i] = iₒ:(iₒ+length(blkspacesᵢ)-1)
+        blkₒ = blkindices[i][end] + 1
+        iₒ = indices[i][end] + 1
+    end
+
+    JetDSpace(blkspaces, blkindices, indices)
+end
+
 Base.size(R::JetDSpace) = (R.indices[end][end],)
 Base.eltype(R::Type{JetDSpace{T,S}}) where {T,S} = T
 Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
@@ -367,6 +382,6 @@ Jets.indices(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R} = indic
 Jets.indices(A::Jop{T}, i::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = indices(jet(A), i)
 Jets.indices(A::Jets.JopAdjoint{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) where {D,R} = indices(A.op, i == 1 ? 2 : 1)
 
-export blockproc, localblockindices
+export JetDSpace, blockproc, localblockindices
 
 end

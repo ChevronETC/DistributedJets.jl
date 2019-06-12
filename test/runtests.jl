@@ -40,6 +40,16 @@ end
     @test indices(A,1) == [1:2,3:10]
 end
 
+@testset "JetDSpace construction from JetBSpace array" begin
+    _blkspaces = [JetBSpace([JetSpace(Float64,2),JetSpace(Float64,2)]), JetBSpace([JetSpace(Float64,2),JetSpace(Float64,2)])]
+    blkspaces = distribute(_blkspaces)
+    R = JetDSpace(blkspaces)
+    @test length(R) == 8
+    @test nblocks(R) == 4
+    @test R.blkindices == [1:2,3:4]
+    @test R.indices == [1:4,5:8]
+end
+
 @testset "JetDSpace construction, 1D arrays" begin
     A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
     R = range(A)
@@ -218,7 +228,7 @@ end
     @test nblocks(F,2) == 4
     @test nblocks(F) == (3,4)
 
-    @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+    @test isa(F, JopNl{<:Jet{<:JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
 
     F₁ = remotecall_fetch(localpart, workers()[1], F)
     F₂ = remotecall_fetch(localpart, workers()[2], F)
@@ -228,7 +238,7 @@ end
     @test remotecall_fetch(localblockindices, workers()[1], F, 1) == 1:2
     @test remotecall_fetch(localblockindices, workers()[1], F, 2) == 1:4
 
-    @test isa(F₁, JopNl{<:Jet{<:Jets.JetBSpace,<:Jets.JetBSpace,typeof(Jets.JetBlock_f!)}})
+    @test isa(F₁, JopNl{<:Jet{<:JetBSpace,<:JetBSpace,typeof(Jets.JetBlock_f!)}})
 
     _G = [_F[i,j] for i in 1:3, j in 1:4]
     G = @blockop _G
@@ -276,7 +286,7 @@ end
     _G = [_F[i,j] for i in 1:3, j in 1:4]
     G = @blockop _G
 
-    @test isa(F, JopNl{<:Jet{<:Jets.JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+    @test isa(F, JopNl{<:Jet{<:JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
 
     @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
     @test ones(domain(F)) ≈ ones(40)
