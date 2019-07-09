@@ -38,7 +38,7 @@ function prescribedist(rng::Vector{UnitRange{Int}})
 end
 
 Jets.indices(cuts::AbstractVector{Int}) = [cuts[i]:(cuts[i+1]-1) for i=1:(length(cuts)-1)]
-Jets.indices(A::DArray{T}, i::Integer) where {T} = indices(A.cuts[i])
+Jets.indices(A::DArray{T}, i::Integer=1) where {T} = indices(A.cuts[i])
 
 #
 # Distributed block operators
@@ -88,7 +88,7 @@ end
 # DBArray array interface implementation <--
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
 Base.size(x::DBArray) = (x.indices[end][end],)
-Jets.indices(x::DBArray, i::Integer) = indices(x.darray, i)
+Jets.indices(x::DBArray, i::Integer=1) = indices(x.darray, i)
 
 DBArray_local_getindex(x, j) = getindex(localpart(x), j)
 
@@ -377,10 +377,6 @@ Jets.getblock(A::JopAdjoint{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.Jet
 
 Jets.getblock(::Type{JopLn}, A::Jop{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = JopLn(getblock(A, i, j))
 Jets.getblock(::Type{JopNl}, F::Jop{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = getblock(F, i, j)::JopNl
-
-Jets.indices(jet::Jet{D,R,typeof(JetDBlock_f!)}, i::Integer) where {D,R} = indices(state(A).ops, i)
-Jets.indices(A::Jop{T}, i::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = indices(jet(A), i)
-Jets.indices(A::Jets.JopAdjoint{Jet{D,R,typeof(JetDBlock_f!)}}, i::Integer) where {D,R} = indices(A.op, i == 1 ? 2 : 1)
 
 export JetDSpace, blockproc, localblockindices
 

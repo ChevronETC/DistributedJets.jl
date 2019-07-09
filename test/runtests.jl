@@ -38,6 +38,7 @@ end
     @test A.indices[1] == (1:2,)
     @test A.indices[2] == (3:10,)
     @test indices(A,1) == [1:2,3:10]
+    @test indices(A) == indices(A,1)
 end
 
 @testset "JetDSpace construction from JetBSpace array" begin
@@ -94,6 +95,7 @@ end
     @test size(d) == size(_d)
     @test d.darray.cuts == _d.cuts
     @test d.darray.indices == _d.indices
+    @test indices(d) == [1:2,3:4]
 
     y = similar(d)
     @test isa(y, DistributedJets.DBArray{Float64})
@@ -244,6 +246,9 @@ end
     G = @blockop _G
 
     @test procs(F) == procs(state(F).ops)
+
+    @test nblocks(F,1) == 3
+    @test nblocks(F,2) == 4
 
     @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
     @test ones(domain(F)) ≈ ones(40)
