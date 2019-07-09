@@ -229,6 +229,7 @@ end
     @test nblocks(F,1) == 3
     @test nblocks(F,2) == 4
     @test nblocks(F) == (3,4)
+    @test blockmap(F) == [1:2,3:3]
 
     @test isa(F, JopNl{<:Jet{<:JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
 
@@ -246,9 +247,6 @@ end
     G = @blockop _G
 
     @test procs(F) == procs(state(F).ops)
-
-    @test nblocks(F,1) == 3
-    @test nblocks(F,2) == 4
 
     @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
     @test ones(domain(F)) ≈ ones(40)
