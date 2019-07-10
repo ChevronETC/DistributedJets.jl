@@ -343,29 +343,30 @@ end
 end
 
 @testset "JopDBlock, statistics reporting" begin
-    _F = DArray(I->[JopBar(10;asleep=2) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
-    F = @blockop _F perfstatfile="stats.json" perfstatdelay=1
+    _F = DArray(I->[JopBar(10;asleep=0) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+    F = @blockop _F perfstatfile="stats-john.json"
 
     m = rand(domain(F))
     d = F*m
 
-    s = JSON.parse(read("stats.json", String))
-    rm("stats.json", force=true)
+    s = JSON.parse(read("stats-john.json", String))
+    rm("stats-john.json", force=true)
     @test s[1]["values"] ≈ π*ones(8)
     @test s[2]["values"] ≈ π*ones(4)
 
     J = jacobian(F, m)
     d = J*m
 
-    s = JSON.parse(read("stats.json", String))
-    rm("stats.json", force=true)
+    s = JSON.parse(read("stats-john.json", String))
+    rm("stats-john.json", force=true)
     @test s[1]["values"] ≈ π*ones(8)
     @test s[2]["values"] ≈ π*ones(4)
 
     m = J'*d
 
-    s = JSON.parse(read("stats.json", String))
-    rm("stats.json", force=true)
+    s = JSON.parse(read("stats-john.json", String))
+
+    rm("stats-john.json", force=true)
     @test s[1]["values"] ≈ π*ones(8)
     @test s[2]["values"] ≈ π*ones(4)
 end

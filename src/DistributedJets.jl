@@ -242,7 +242,7 @@ end
 JetDBlock_countidxs(spaces) = length(localpart(spaces)[1])
 JetDBlock_countblks(spaces) = nblocks(localpart(spaces)[1])
 
-function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="", perfstatdelay=Inf) where {T<:Jop}
+function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="") where {T<:Jop}
     length(ops.cuts[2]) < 3 || error("Distributed support is across rows")
 
     dom = remotecall_fetch(JetDBlock_domain, procs(ops)[1], ops)
@@ -280,7 +280,7 @@ function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="", perfstatdelay=Inf) whe
     rng = JetDSpace(blkspaces, blkidxs, idxs)
 
     Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!,
-        s = (ops=_ops, dom=dom, blockmap=indices(ops, 1), perfstatfile=perfstatfile, perfstatdelay=perfstatdelay))
+        s = (ops=_ops, dom=dom, blockmap=indices(ops, 1), perfstatfile=perfstatfile))
 end
 
 function addmasterpid(pids)
@@ -305,10 +305,9 @@ function _JetDBlock_f!(d::DBArray, m::AbstractArray, ops)
     nothing
 end
 
-function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, perfstatfile, perfstatdelay, kwargs...)
-    computetask = @async _JetDBlock_f!(d, m, ops)
-    @async perfstat(ops, perfstatfile, perfstatdelay, computetask)
-    wait(computetask)
+function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, perfstatfile, kwargs...)
+    _JetDBlock_f!(d, m, ops)
+    perfstat(ops, perfstatfile)
     d
 end
 
@@ -327,10 +326,9 @@ function _JetDBlock_df!(d::DBArray, m::AbstractArray, ops)
     nothing
 end
 
-function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, perfstatfile, perfstatdelay, kwargs...)
-    computetask = @async _JetDBlock_df!(d, m, ops)
-    @async perfstat(ops, perfstatfile, perfstatdelay, computetask)
-    wait(computetask)
+function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, perfstatfile, kwargs...)
+    _JetDBlock_df!(d, m, ops)
+    perfstat(ops, perfstatfile)
     d
 end
 
@@ -351,10 +349,9 @@ function _JetDBlock_df′!(m::AbstractArray, d::DBArray, ops, dom)
     nothing
 end
 
-function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, perfstatfile, perfstatdelay, kwargs...)
-    computetask = @async _JetDBlock_df′!(m, d, ops, dom)
-    @async perfstat(ops, perfstatfile, perfstatdelay, computetask)
-    wait(computetask)
+function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, perfstatfile, kwargs...)
+    _JetDBlock_df′!(m, d, ops, dom)
+    perfstat(ops, perfstatfile)
     m
 end
 
@@ -371,18 +368,13 @@ function Jets.perfstat(ops, perfstatfile)
         @sync for (i, pid) in enumerate(procs(ops))
             @async s[i] = remotecall_fetch(_perfstat, pid, ops)
         end
-        write(perfstatfile, json(s, 1))
-    end
-    nothing
-end
-
-function Jets.perfstat(ops::DArray{T,2}, perfstatfile::AbstractString, perfstatdelay::Int, computetask::Task) where {T<:Jop}
-    while perfstatfile != ""
-        if istaskdone(computetask)
-            break
+        if isfile(perfstatfile)
+            _s = JSON.parse(read(perfstatfile, String))
+            push!(_s, s)
+            write(perfstatfile, json(_s, 1))
+        else
+            write(perfstatfile, json([s], 1))
         end
-        sleep(perfstatdelay)
-        perfstat(ops, perfstatfile)
     end
     nothing
 end
