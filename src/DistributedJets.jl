@@ -360,7 +360,7 @@ end
 function _perfstat_local(ops, operation)
     _ops = state(localpart(ops)[1]).ops
     _s = [perfstat(_ops[iblkrow,iblkcol]) for iblkrow=1:size(_ops,1), iblkcol=1:size(_ops,2)][:]
-    Dict("id"=>myid(), "hostname"=>gethostname(), "operation"=>operation, "values"=>_s)
+    Dict("id"=>myid(), "hostname"=>gethostname(), "operation"=>operation, "localblock"=>_s)
 end
 
 function Jets.perfstat(ops, operation, perfstatfile)

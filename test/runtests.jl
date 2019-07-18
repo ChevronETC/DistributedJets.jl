@@ -352,8 +352,8 @@ end
     d = F*m
 
     s = JSON.parse(read("stats.json", String))
-    @test s["step"][1]["pid"][1]["values"] ≈ π*ones(8)
-    @test s["step"][1]["pid"][2]["values"] ≈ π*ones(4)
+    @test s["step"][1]["pid"][1]["localblock"] ≈ π*ones(8)
+    @test s["step"][1]["pid"][2]["localblock"] ≈ π*ones(4)
     @test s["step"][1]["pid"][1]["operation"] == "f"
     @test s["step"][1]["pid"][2]["operation"] == "f"
 
@@ -361,16 +361,16 @@ end
     d = J*m
 
     s = JSON.parse(read("stats.json", String))
-    @test s["step"][2]["pid"][1]["values"] ≈ π*ones(8)
-    @test s["step"][2]["pid"][2]["values"] ≈ π*ones(4)
+    @test s["step"][2]["pid"][1]["localblock"] ≈ π*ones(8)
+    @test s["step"][2]["pid"][2]["localblock"] ≈ π*ones(4)
     @test s["step"][2]["pid"][1]["operation"] == "df"
     @test s["step"][2]["pid"][2]["operation"] == "df"
 
     m = J'*d
 
     s = JSON.parse(read("stats.json", String))
-    @test s["step"][3]["pid"][1]["values"] ≈ π*ones(8)
-    @test s["step"][3]["pid"][2]["values"] ≈ π*ones(4)
+    @test s["step"][3]["pid"][1]["localblock"] ≈ π*ones(8)
+    @test s["step"][3]["pid"][2]["localblock"] ≈ π*ones(4)
     @test s["step"][3]["pid"][1]["operation"] == "df′"
     @test s["step"][3]["pid"][2]["operation"] == "df′"
 
