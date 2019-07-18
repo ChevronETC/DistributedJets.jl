@@ -279,6 +279,8 @@ function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="") where {T<:Jop}
 
     rng = JetDSpace(blkspaces, blkidxs, idxs)
 
+    perfstatfile == "" || rm(perfstatfile, force=true)
+
     Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!,
         s = (ops=_ops, dom=dom, blockmap=indices(ops, 1), perfstatfile=perfstatfile))
 end
@@ -307,7 +309,7 @@ end
 
 function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, perfstatfile, kwargs...)
     _JetDBlock_f!(d, m, ops)
-    perfstat(ops, perfstatfile)
+    perfstat(ops, "f", perfstatfile)
     d
 end
 
@@ -328,7 +330,7 @@ end
 
 function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, perfstatfile, kwargs...)
     _JetDBlock_df!(d, m, ops)
-    perfstat(ops, perfstatfile)
+    perfstat(ops, "df", perfstatfile)
     d
 end
 
@@ -351,29 +353,29 @@ end
 
 function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, perfstatfile, kwargs...)
     _JetDBlock_df′!(m, d, ops, dom)
-    perfstat(ops, perfstatfile)
+    perfstat(ops, "df′", perfstatfile)
     m
 end
 
-function _perfstat(ops)
+function _perfstat_local(ops, operation)
     _ops = state(localpart(ops)[1]).ops
     _s = [perfstat(_ops[iblkrow,iblkcol]) for iblkrow=1:size(_ops,1), iblkcol=1:size(_ops,2)][:]
-    Dict("id"=>myid(), "hostname"=>gethostname(), "values"=>_s)
+    Dict("id"=>myid(), "hostname"=>gethostname(), "operation"=>operation, "values"=>_s)
 end
 
-function Jets.perfstat(ops, perfstatfile)
+function Jets.perfstat(ops, operation, perfstatfile)
     if perfstatfile != ""
         pids = procs(ops)
         s = Vector{Dict{String,Any}}(undef, length(pids))
         @sync for (i, pid) in enumerate(procs(ops))
-            @async s[i] = remotecall_fetch(_perfstat, pid, ops)
+            @async s[i] = remotecall_fetch(_perfstat_local, pid, ops, operation)
         end
         if isfile(perfstatfile)
             _s = JSON.parse(read(perfstatfile, String))
-            push!(_s, s)
+            push!(_s["step"], Dict("pid"=>s))
             write(perfstatfile, json(_s, 1))
         else
-            write(perfstatfile, json([s], 1))
+            write(perfstatfile, json(Dict("step"=>[Dict("pid"=>s)]), 1))
         end
     end
     nothing

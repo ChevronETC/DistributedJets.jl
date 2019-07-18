@@ -9,11 +9,11 @@ addprocs(2)
     JopLn(;df! = JopFoo_df!, df′! = JopFoo_df!, dom = spc, rng = spc, s = (diagonal=diag,))
 end
 
-@everywhere JopBar_f!(d,m;asleep) = begin sleep(asleep); d .= m.^2 end
-@everywhere JopBar_df!(δd,δm;mₒ,asleep,kwargs...) = begin sleep(asleep); δd .= 2 .* mₒ .* δm end
-@everywhere function JopBar(n; asleep=0)
+@everywhere JopBar_f!(d,m) = d .= m.^2
+@everywhere JopBar_df!(δd,δm;mₒ,kwargs...) = δd .= 2 .* mₒ .* δm
+@everywhere function JopBar(n)
     spc = JetSpace(Float64, n)
-    JopNl(f! = JopBar_f!, df! = JopBar_df!, df′! = JopBar_df!, dom = spc, rng = spc, s=(asleep=asleep,))
+    JopNl(f! = JopBar_f!, df! = JopBar_df!, df′! = JopBar_df!, dom = spc, rng = spc)
 end
 @everywhere Jets.perfstat(J::T) where {D,R,T<:Jets.Jet{D,R,typeof(JopBar_f!)}} = Float64(π)
 
@@ -343,32 +343,38 @@ end
 end
 
 @testset "JopDBlock, statistics reporting" begin
-    _F = DArray(I->[JopBar(10;asleep=0) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
-    F = @blockop _F perfstatfile="stats-john.json"
+    rm("stats.json", force=true)
+
+    _F = DArray(I->[JopBar(10) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+    F = @blockop _F perfstatfile="stats.json"
 
     m = rand(domain(F))
     d = F*m
 
-    s = JSON.parse(read("stats-john.json", String))
-    rm("stats-john.json", force=true)
-    @test s[1]["values"] ≈ π*ones(8)
-    @test s[2]["values"] ≈ π*ones(4)
+    s = JSON.parse(read("stats.json", String))
+    @test s["step"][1]["pid"][1]["values"] ≈ π*ones(8)
+    @test s["step"][1]["pid"][2]["values"] ≈ π*ones(4)
+    @test s["step"][1]["pid"][1]["operation"] == "f"
+    @test s["step"][1]["pid"][2]["operation"] == "f"
 
     J = jacobian(F, m)
     d = J*m
 
-    s = JSON.parse(read("stats-john.json", String))
-    rm("stats-john.json", force=true)
-    @test s[1]["values"] ≈ π*ones(8)
-    @test s[2]["values"] ≈ π*ones(4)
+    s = JSON.parse(read("stats.json", String))
+    @test s["step"][2]["pid"][1]["values"] ≈ π*ones(8)
+    @test s["step"][2]["pid"][2]["values"] ≈ π*ones(4)
+    @test s["step"][2]["pid"][1]["operation"] == "df"
+    @test s["step"][2]["pid"][2]["operation"] == "df"
 
     m = J'*d
 
-    s = JSON.parse(read("stats-john.json", String))
+    s = JSON.parse(read("stats.json", String))
+    @test s["step"][3]["pid"][1]["values"] ≈ π*ones(8)
+    @test s["step"][3]["pid"][2]["values"] ≈ π*ones(4)
+    @test s["step"][3]["pid"][1]["operation"] == "df′"
+    @test s["step"][3]["pid"][2]["operation"] == "df′"
 
-    rm("stats-john.json", force=true)
-    @test s[1]["values"] ≈ π*ones(8)
-    @test s[2]["values"] ≈ π*ones(4)
+    rm("stats.json", force=true)
 end
 
 rmprocs(workers())
