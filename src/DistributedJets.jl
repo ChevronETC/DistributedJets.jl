@@ -141,6 +141,20 @@ function LinearAlgebra.dot(x::DBArray{T}, y::DBArray{T}) where {T}
     sum(z)
 end
 
+DBArray_local_extrema(x::DBArray) = extrema(localpart(x))
+
+function Base.extrema(x::DBArray{T}) where {T}
+    pids = procs(x)
+    mn = zeros(T, length(pids))
+    mx = zeros(T, length(pids))
+    @sync for (ipid,pid) in enumerate(pids)
+        @async begin
+            mn[ipid],mx[ipid] = remotecall_fetch(DBArray_local_extrema, pid, x)::Tuple{T,T}
+        end
+    end
+    minimum(mn),maximum(mx)
+end
+
 _localpart(x::DBArray) = localpart(x.darray)
 DistributedArrays.localpart(x::DBArray) = _localpart(x)[1]::Jets.BlockArray
 Distributed.procs(x::DBArray) = procs(x.darray)

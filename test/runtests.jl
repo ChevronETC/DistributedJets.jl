@@ -162,6 +162,15 @@ end
     @test typeof(norm(_d, 0.5)) == Float32
 end
 
+@testset "DBArray, extrema" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    mn,mx = extrema(d)
+    _mn,_mx = extrema(convert(Array,d))
+    @test mn ≈ _mn
+    @test mx ≈ _mx
+end
+
 @testset "DBArray broadcasting, 1D arrays" begin
     A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (7,1), workers(), [2,1])
     R = range(A)

@@ -31,6 +31,7 @@ SUITE["DBArray"] = BenchmarkGroup()
 SUITE["DBArray"]["construct"] = @benchmarkable rand($rangeF)
 SUITE["DBArray"]["norm"] = @benchmarkable norm($d₁)
 SUITE["DBArray"]["dot"] = @benchmarkable dot($d₁,$d₂)
+SUITE["DBArray"]["extrema"] = @benchmarkable extrema($d₁)
 SUITE["DBArray"]["broadcasting"] = @benchmarkable d₄ .= α₁*d₁ .+ α₂*d₂ .- α₃*d₃
 
 _F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers(), [3,1])
