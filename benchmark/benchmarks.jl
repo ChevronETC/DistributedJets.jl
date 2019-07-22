@@ -60,6 +60,17 @@ SUITE["DBlock, homogeneous"]["dom,block!"] = @benchmarkable setblock!($m, 3, $(r
 SUITE["DBlock, homogeneous"]["rng,block"] = @benchmarkable getblock($d, 10)
 SUITE["DBlock, homogeneous"]["rng,block!"] = @benchmarkable setblock!($d, 10, $(rand(100)))
 
+F = @blockop _F perfstatfile="stats.json"
+J = jacobian(F, m)
+SUITE["DBlock, perfstat, homogeneous"] = BenchmarkGroup()
+SUITE["DBlock, perfstat, homogeneous"]["mul!"] = @benchmarkable mul!($d, $F, $m)
+SUITE["DBlock, perfstat, homogeneous"]["mul"] = @benchmarkable $F * $m
+SUITE["DBlock, perfstat, homogeneous"]["mul!, linear"] = @benchmarkable mul!($d, $J, $m)
+SUITE["DBlock, perfstat, homogeneous"]["mul, linear"] = @benchmarkable $J * $m
+SUITE["DBlock, perfstat, homogeneous"]["mul!, adjoint"] = @benchmarkable mul!($m, ($J)', $d)
+SUITE["DBlock, perfstat, homogeneous"]["mul, adjoint"] = @benchmarkable ($J)' * $d
+rm("stats.json", force=true)
+
 @everywhere function myblock(i,j)
     if iseven(i) && isodd(j)
         return JopFoo(rand(100))

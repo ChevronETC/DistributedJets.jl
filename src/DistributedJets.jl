@@ -1,6 +1,6 @@
 module DistributedJets
 
-using Distributed, DistributedArrays, Jets, LinearAlgebra, ParallelOperations
+using Distributed, DistributedArrays, JSON, Jets, LinearAlgebra, ParallelOperations, Statistics
 
 #
 # DArray extensions
@@ -256,7 +256,7 @@ end
 JetDBlock_countidxs(spaces) = length(localpart(spaces)[1])
 JetDBlock_countblks(spaces) = nblocks(localpart(spaces)[1])
 
-function Jets.JetBlock(ops::DArray{T,2}) where {T<:Jop}
+function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="") where {T<:Jop}
     length(ops.cuts[2]) < 3 || error("Distributed support is across rows")
 
     dom = remotecall_fetch(JetDBlock_domain, procs(ops)[1], ops)
@@ -293,7 +293,10 @@ function Jets.JetBlock(ops::DArray{T,2}) where {T<:Jop}
 
     rng = JetDSpace(blkspaces, blkidxs, idxs)
 
-    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!, s = (ops=_ops, dom=dom, blockmap=indices(ops, 1)))
+    perfstatfile == "" || rm(perfstatfile, force=true)
+
+    Jet(dom = dom, rng = rng, f! = JetDBlock_f!, df! = JetDBlock_df!, df′! = JetDBlock_df′!,
+        s = (ops=_ops, dom=dom, blockmap=indices(ops, 1), perfstatfile=perfstatfile))
 end
 
 function addmasterpid(pids)
@@ -309,12 +312,18 @@ function JetDBlock_local_f!(d, _m, ops)
     nothing
 end
 
-function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, kwargs...)
+function _JetDBlock_f!(d::DBArray, m::AbstractArray, ops)
     pids = procs(ops)
     _m = bcast(m, addmasterpid(pids))
     @sync for pid in pids
         @async remotecall_fetch(JetDBlock_local_f!, pid, d, _m, ops)
     end
+    nothing
+end
+
+function JetDBlock_f!(d::DBArray, m::AbstractArray; ops, perfstatfile, kwargs...)
+    _JetDBlock_f!(d, m, ops)
+    perfstat(ops, "f", perfstatfile)
     d
 end
 
@@ -324,12 +333,18 @@ function JetDBlock_local_df!(d, _m, ops)
     nothing
 end
 
-function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, kwargs...)
+function _JetDBlock_df!(d::DBArray, m::AbstractArray, ops)
     pids = procs(ops)
     _m = bcast(m, addmasterpid(pids))
     @sync for pid in pids
         @async remotecall_fetch(JetDBlock_local_df!, pid, d, _m, ops)
     end
+    nothing
+end
+
+function JetDBlock_df!(d::DBArray, m::AbstractArray; ops, perfstatfile, kwargs...)
+    _JetDBlock_df!(d, m, ops)
+    perfstat(ops, "df", perfstatfile)
     d
 end
 
@@ -339,7 +354,7 @@ function JetDBlock_local_df′!(_m, d, ops)
     nothing
 end
 
-function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, kwargs...)
+function _JetDBlock_df′!(m::AbstractArray, d::DBArray, ops, dom)
     m .= 0
     pids = procs(ops)
     _m = TypeFutures(m, zeros, addmasterpid(pids), dom)
@@ -347,7 +362,37 @@ function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, kwargs...)
         @async remotecall_fetch(JetDBlock_local_df′!, pid, _m, d, ops)
     end
     reduce!(_m)
+    nothing
+end
+
+function JetDBlock_df′!(m::AbstractArray, d::DBArray; ops, dom, perfstatfile, kwargs...)
+    _JetDBlock_df′!(m, d, ops, dom)
+    perfstat(ops, "df′", perfstatfile)
     m
+end
+
+function _perfstat_local(ops, operation)
+    _ops = state(localpart(ops)[1]).ops
+    _s = [perfstat(_ops[iblkrow,iblkcol]) for iblkrow=1:size(_ops,1), iblkcol=1:size(_ops,2)][:]
+    Dict("id"=>myid(), "hostname"=>gethostname(), "operation"=>operation, "localblock"=>_s)
+end
+
+function Jets.perfstat(ops, operation, perfstatfile)
+    if perfstatfile != ""
+        pids = procs(ops)
+        s = Vector{Dict{String,Any}}(undef, length(pids))
+        @sync for (i, pid) in enumerate(procs(ops))
+            @async s[i] = remotecall_fetch(_perfstat_local, pid, ops, operation)
+        end
+        if isfile(perfstatfile)
+            _s = JSON.parse(read(perfstatfile, String))
+            push!(_s["step"], Dict("pid"=>s))
+            write(perfstatfile, json(_s, 1))
+        else
+            write(perfstatfile, json(Dict("step"=>[Dict("pid"=>s)]), 1))
+        end
+    end
+    nothing
 end
 
 function JetDBlock_local_point!(ops, _mₒ)
