@@ -1,6 +1,8 @@
 using Distributed
+using DistributedJets
+
 #Need to remove all procs before running these tests
-addprocs(2)
+addprocs(4)
 @everywhere using DistributedArrays, DistributedJets, JSON, Jets, LinearAlgebra, Test
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
@@ -26,7 +28,7 @@ end
 end
 
 @testset "DArray irregular construction, T=$T" for T in (Float32,Float64,Complex{Float32},Complex{Float64})
-    A = DArray(I->myid()*ones(T,length(I[1]),length(I[2])), workers(), [1:2,3:10], [1:2])
+    A = DArray(I->myid()*ones(T,length(I[1]),length(I[2])), workers()[1:2], [1:2,3:10], [1:2])
     @test size(A) == (10,2)
     @test A.indices[1] == (1:2, 1:2)
     @test A.indices[2] == (3:10, 1:2)
@@ -40,11 +42,12 @@ end
     @test A.indices[2] == (3:10,)
     @test indices(A,1) == [1:2,3:10]
     @test indices(A) == indices(A,1)
+    @show typeof(A)
 end
 
 @testset "JetDSpace construction from JetBSpace array" begin
     _blkspaces = [JetBSpace([JetSpace(Float64,2),JetSpace(Float64,2)]), JetBSpace([JetSpace(Float64,2),JetSpace(Float64,2)])]
-    blkspaces = distribute(_blkspaces)
+    blkspaces = distribute(_blkspaces; procs=workers()[1:2])
     R = JetDSpace(blkspaces)
     @test length(R) == 8
     @test nblocks(R) == 4
@@ -53,7 +56,7 @@ end
 end
 
 @testset "JetDSpace construction, 1D arrays" begin
-    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
+    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1), workers()[1:2])
     R = range(A)
     @test size(R) == (4,)
     @test length(R) == 4
@@ -61,14 +64,14 @@ end
     @test eltype(typeof(R)) == Float64
     @test ndims(R) == 1
     @test indices(R) == [1:2,3:4]
-    @test procs(R) == workers()
-    @test nprocs(R) == nworkers()
-    @test nprocs(A) == nworkers()
+    @test procs(R) == workers()[1:2]
+    @test nprocs(R) == 2
+    @test nprocs(A) == 2
     @test nblocks(R) == 2
 end
 
 @testset "JetDSpace construction, 2D arrays" begin
-    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (2,1))
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (2,1), workers()[1:2])
     R = range(A)
     @test size(R) == (12,)
     @test length(R) == 12
@@ -76,19 +79,19 @@ end
     @test eltype(typeof(R)) == Float64
     @test ndims(R) == 1
     @test indices(R) == [1:6,7:12]
-    @test procs(R) == workers()
-    @test nprocs(R) == nworkers()
-    @test nprocs(A) == nworkers()
+    @test procs(R) == workers()[1:2]
+    @test nprocs(R) == 2
+    @test nprocs(A) == 2
     @test nblocks(R) == 2
 end
 
 @testset "JetDSpace operations, 1D arrays" begin
-    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1))
+    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1), workers()[1:2])
     R = range(A)
-    @test dzeros(4) ≈ zeros(R)
-    @test dones(4) ≈ ones(R)
+    @test dzeros((4,), workers()[1:2]) ≈ zeros(R)
+    @test dones((4,), workers()[1:2]) ≈ ones(R)
     d = rand(R)
-    _d = drand(4)
+    _d = drand((4,), workers()[1:2])
     @test size(d) == size(_d)
     @test d.darray.cuts == _d.cuts
     @test d.darray.indices == _d.indices
@@ -117,12 +120,12 @@ end
 end
 
 @testset "JetDSpace operations, 2D arrays" begin
-    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
     R = range(A)
-    @test dzeros(24) ≈ zeros(R)
-    @test dones(24) ≈ ones(R)
+    @test dzeros((24,), workers()[1:2]) ≈ zeros(R)
+    @test dones((24,), workers()[1:2]) ≈ ones(R)
     d = rand(R)
-    _d = drand(24)
+    _d = drand((24,), workers()[1:2])
     @test size(d) == size(_d)
     @test d.darray.cuts == _d.cuts
     @test d.darray.indices == _d.indices
@@ -145,7 +148,7 @@ end
 end
 
 @testset "DBArray, inner product" begin
-    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
     d₁ = rand(range(A))
     d₂ = rand(range(A))
     @test dot(d₁, d₂) ≈ dot(convert(Array, d₁), convert(Array, d₂))
@@ -164,7 +167,7 @@ end
 end
 
 @testset "DBArray, extrema" begin
-    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
     d = rand(range(A))
     mn,mx = extrema(d)
     _mn,_mx = extrema(convert(Array,d))
@@ -173,7 +176,7 @@ end
 end
 
 @testset "DBArray broadcasting, 1D arrays" begin
-    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (7,1), workers(), [2,1])
+    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (7,1), workers()[1:2], [2,1])
     R = range(A)
     R.blkindices
     R.blkspaces[1]
@@ -197,7 +200,7 @@ end
 end
 
 @testset "DBArray broadcasting, 2D arrays" begin
-    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (7,1), workers(), [2,1])
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (7,1), workers()[1:2], [2,1])
     R = range(A)
     R.blkindices
     R.blkspaces[1]
@@ -232,14 +235,15 @@ end
     end
 end
 
-@testset "JopDBlock, heterogeneous" begin
-    _F = DArray(I->[myblocks(i,j) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+@testset "JopDBlock, heterogeneous, tall and skinny" begin
+    _F = DArray(I->[myblocks(i,j) for i in I[1], j in I[2]], (3,4), workers()[1:2], [2,1])
     F = @blockop _F
 
     @test nblocks(F,1) == 3
     @test nblocks(F,2) == 4
     @test nblocks(F) == (3,4)
-    @test blockmap(F) == [1:2,3:3]
+    @test blockmap(F)[1,1] == (1:2,1:4)
+    @test blockmap(F)[2,1] == (3:3,1:4)
 
     @test isa(F, JopNl{<:Jet{<:JetBSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
 
@@ -292,8 +296,8 @@ end
     @test A₁₄*m[31:40] ≈ B₁₄*m[31:40]
 end
 
-@testset "JopDBlock, homogeneous" begin
-    _F = DArray(I->[JopBar(10) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+@testset "JopDBlock, homogeneous, tall and skinny" begin
+    _F = DArray(I->[JopBar(10) for i in I[1], j in I[2]], (3,4), workers()[1:2], [2,1])
     F = @blockop _F
 
     _G = [_F[i,j] for i in 1:3, j in 1:4]
@@ -326,8 +330,96 @@ end
     @test J'*δd ≈ _J'*collect(δd)
 end
 
+@testset "JopDBlock, distributed->distributed, block diagonal" begin
+    _F = DArray(I->[i==j ? JopBar(10) : JopZeroBlock(JetSpace(Float64,10),JetSpace(Float64,10)) for i in I[1], j in I[2]], (4,4), workers(), [4,1])
+    F = @blockop _F isdiag=true
+
+    _G = [_F[i,j] for i in 1:4, j in 1:4]
+    G = @blockop _G
+
+    @test isa(F, JopNl{<:Jet{<:DistributedJets.JetDSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:10,11:20,21:30,31:40])
+    @test ones(domain(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:10,11:20,21:30,31:40])
+
+    m = rand(domain(F))
+    @test collect(F*m) ≈ G*collect(m)
+
+    J = jacobian!(F, m)
+    _J = jacobian!(G, collect(m))
+
+    δm = rand(domain(F))
+    @test collect(J*δm) ≈ _J*collect(δm)
+    δd = rand(range(J))
+    @test collect(J'*δd) ≈ _J'*collect(δd)
+end
+
+@testset "JopDBlock, heterogeneous, distributed->distributed" begin
+    _F = DArray(I->Jop[myblocks(i,j) for i in I[1], j in I[2]], (3,5), workers(), [2,2])
+    F = @blockop _F
+
+    @test nblocks(F,1) == 3
+    @test nblocks(F,2) == 5
+    @test nblocks(F) == (3,5)
+    @test blockmap(F)[1,1] == (1:2,1:3)
+    @test blockmap(F)[2,1] == (3:3,1:3)
+    @test blockmap(F)[1,2] == (1:2,4:5)
+    @test blockmap(F)[2,2] == (3:3,4:5)
+
+    @test isa(F, JopNl{<:Jet{<:DistributedJets.JetDSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    @test procs(F) == [workers()[1] workers()[3]; workers()[2] workers()[4]]
+
+    @test remotecall_fetch(localblockindices, workers()[1], F) == (1:2,1:3)
+    @test remotecall_fetch(localblockindices, workers()[2], F) == (3:3,1:3)
+    @test remotecall_fetch(localblockindices, workers()[3], F) == (1:2,4:5)
+    @test remotecall_fetch(localblockindices, workers()[4], F) == (3:3,4:5)
+
+    @test remotecall_fetch(localblockindices, workers()[1], F, 1) == 1:2
+    @test remotecall_fetch(localblockindices, workers()[1], F, 2) == 1:3
+
+    F₁₁ = remotecall_fetch(localpart, workers()[1], F)
+    @test isa(F₁₁, JopNl{<:Jet{<:JetBSpace,<:JetBSpace,typeof(Jets.JetBlock_f!)}})
+
+    _G = [_F[i,j] for i in 1:3, j in 1:5]
+    G = @blockop _G
+
+    @test procs(F) == procs(state(F).ops)
+
+    @test ones(range(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:20,21:30])
+    @test ones(domain(F)) ≈ DArray(I->ones(length(I[1])), procs(_F), [1:30,31:50])
+    @test zeros(range(F)) ≈ DArray(I->zeros(length(I[1])), procs(_F), [1:20,21:30])
+    @test zeros(domain(F)) ≈ DArray(I->zeros(length(I[1])), procs(_F), [1:30,31:50])
+    @test size(rand(domain(F))) == (50,)
+    x = rand(range(F))
+    @test size(x) == (30,)
+    @test x.darray.cuts == [[1,21,31]]
+    x = Array(range(F))
+    @test size(x) == (30,)
+    @test x.darray.cuts == [[1,21,31]]
+
+    m = rand(domain(F))
+    @test collect(F*m) ≈ G*collect(m)
+
+    J = jacobian!(F, m)
+    _J = jacobian!(G, m)
+
+    δm = rand(domain(J))
+    @test collect(J*δm) ≈ _J*collect(δm)
+
+    δd = rand(range(J))
+    @test J'*δd ≈ _J'*collect(δd)
+
+    F₃₂ = getblock(JopNl,F,3,2)
+    G₃₂ = _G[3,2]
+    @test F₃₂*m[21:30] ≈ G₃₂*m[21:30]
+    A₁₄ = getblock(JopLn,F,1,4)
+    B₁₄ = _G[1,4]
+    @test A₁₄*m[31:40] ≈ B₁₄*m[31:40]
+end
+
 @testset "JetDBlock, localpart" begin
-    F = @blockop DArray(I->[JopBar(10) for i in I[1], j in I[2]], (3,4), workers(), [2,1])
+    F = @blockop DArray(I->[JopBar(10) for i in I[1], j in I[2]], (3,4), workers()[1:2], [2,1])
     m = rand(domain(F))
     J = jacobian!(F, m)
     _J = remotecall_fetch(localpart, workers()[1], J)
