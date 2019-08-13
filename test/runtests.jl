@@ -1,5 +1,4 @@
 using Distributed
-using DistributedJets
 
 #Need to remove all procs before running these tests
 addprocs(4)
@@ -42,7 +41,6 @@ end
     @test A.indices[2] == (3:10,)
     @test indices(A,1) == [1:2,3:10]
     @test indices(A) == indices(A,1)
-    @show typeof(A)
 end
 
 @testset "JetDSpace construction from JetBSpace array" begin

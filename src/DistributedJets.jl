@@ -259,9 +259,9 @@ function JetDBlock_count_idxs_blks(blkspaces)
     countidxs = zeros(Int, n)
     countblks = zeros(Int, n)
     @sync for (i,pid) in enumerate(pids)
-        @sync begin
-            countidxs[i] = remotecall_fetch(JetDBlock_countidxs, pid, blkspaces)
-            countblks[i] = remotecall_fetch(JetDBlock_countblks, pid, blkspaces)
+        @async begin
+            countidxs[i] = remotecall_fetch(JetDBlock_countidxs, pid, blkspaces)::Int
+            countblks[i] = remotecall_fetch(JetDBlock_countblks, pid, blkspaces)::Int
         end
     end
     countidxs,countblks
