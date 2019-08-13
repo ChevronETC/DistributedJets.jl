@@ -1,5 +1,5 @@
 using Distributed
-addprocs(3)
+addprocs(6)
 @everywhere using BenchmarkTools, DistributedArrays, DistributedJets, Jets, LinearAlgebra
 
 const SUITE = BenchmarkGroup()
@@ -17,7 +17,7 @@ end
     JopNl(f! = JopBar_f!, df! = JopBar_df!, dom = spc, rng = spc)
 end
 
-_F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers(), [3,1])
+_F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers()[1:3], [3,1])
 F = @blockop _F
 rangeF = range(F)
 d₁ = rand(rangeF)
@@ -34,7 +34,7 @@ SUITE["DBArray"]["dot"] = @benchmarkable dot($d₁,$d₂)
 SUITE["DBArray"]["extrema"] = @benchmarkable extrema($d₁)
 SUITE["DBArray"]["broadcasting"] = @benchmarkable d₄ .= α₁*d₁ .+ α₂*d₂ .- α₃*d₃
 
-_F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers(), [3,1])
+_F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers()[1:3], [3,1])
 F = @blockop _F
 domainF = domain(F)
 rangeF = range(F)
@@ -79,7 +79,7 @@ rm("stats.json", force=true)
     end
 end
 
-_F = DArray(I->[myblock(i,j) for i in I[1], j in I[2]], (50,10), workers(), [3,1])
+_F = DArray(I->[myblock(i,j) for i in I[1], j in I[2]], (50,10), workers()[1:3], [3,1])
 F = @blockop _F
 domainF = domain(F)
 rangeF = range(F)
@@ -105,4 +105,54 @@ SUITE["DBlock, heterogeneous"]["dom,block!"] = @benchmarkable setblock!($m, 3, $
 SUITE["DBlock, heterogeneous"]["rng,block"] = @benchmarkable getblock($d, 10)
 SUITE["DBlock, heterogeneous"]["rng,block!"] = @benchmarkable setblock!($d, 10, $(rand(100)))
 
-SUITE
+_F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers()[1:6], [3,2])
+F = @blockop _F
+domainF= domain(F)
+rangeF = range(F)
+m = rand(domain(F))
+d = rand(range(F))
+J = jacobian!(F, m)
+SUITE["DBlock, homogeneous, distributed model"] = BenchmarkGroup()
+SUITE["DBlock, homogeneous, distributed model"]["construct"] = @benchmarkable @blockop $_F
+SUITE["DBlock, homogeneous, distributed model"]["mul!"] = @benchmarkable mul!($d, $F, $m)
+SUITE["DBlock, homogeneous, distributed model"]["mul"] = @benchmarkable $F * $m
+SUITE["DBlock, homogeneous, distributed model"]["jacobian"] = @benchmarkable jacobian!($F, $m)
+SUITE["DBlock, homogeneous, distributed model"]["mul!, linear"] = @benchmarkable mul!($d, $J, $m)
+SUITE["DBlock, homogeneous, distributed model"]["mul, linear"] = @benchmarkable $J * $m
+SUITE["DBlock, homogeneous, distributed model"]["mul!, adjoint"] = @benchmarkable mul!($m, ($J)', $d)
+SUITE["DBlock, homogeneous, distributed model"]["mul, adjoint"] = @benchmarkable ($J)' * $d
+SUITE["DBlock, homogeneous, distributed model"]["adjoint"] = @benchmarkable $(J)'
+SUITE["DBlock, homogeneous, distributed model"]["shape"] = @benchmarkable shape($F)
+SUITE["DBlock, homogeneous, distributed model"]["size"] = @benchmarkable size($F)
+SUITE["DBlock, homogeneous, distributed model"]["domain"] = @benchmarkable domain($F)
+SUITE["DBlock, homogeneous, distributed model"]["range"] = @benchmarkable range($F)
+SUITE["DBlock, homogeneous, distributed model"]["dom,block"] = @benchmarkable getblock($m, 3)
+SUITE["DBlock, homogeneous, distributed model"]["dom,block!"] = @benchmarkable setblock!($m, 3, $(rand(100)))
+SUITE["DBlock, homogeneous, distributed model"]["rng,block"] = @benchmarkable getblock($d, 10)
+SUITE["DBlock, homogeneous, distributed model"]["rng,block!"] = @benchmarkable setblock!($d, 10, $(rand(100)))
+
+_F = DArray(I->[i == j ? JopBar(100) : JopZeroBlock(JetSpace(Float64,100),JetSpace(Float64,100)) for i in I[1], j in I[2]], (20,20), workers()[1:3], [3,1])
+F = @blockop _F isdiag=true
+domainF= domain(F)
+rangeF = range(F)
+m = rand(domain(F))
+d = rand(range(F))
+J = jacobian!(F, m)
+SUITE["DBlock, homogeneous, block diagonal"] = BenchmarkGroup()
+SUITE["DBlock, homogeneous, block diagonal"]["construct"] = @benchmarkable @blockop $_F
+SUITE["DBlock, homogeneous, block diagonal"]["mul!"] = @benchmarkable mul!($d, $F, $m)
+SUITE["DBlock, homogeneous, block diagonal"]["mul"] = @benchmarkable $F * $m
+SUITE["DBlock, homogeneous, block diagonal"]["jacobian"] = @benchmarkable jacobian!($F, $m)
+SUITE["DBlock, homogeneous, block diagonal"]["mul!, linear"] = @benchmarkable mul!($d, $J, $m)
+SUITE["DBlock, homogeneous, block diagonal"]["mul, linear"] = @benchmarkable $J * $m
+SUITE["DBlock, homogeneous, block diagonal"]["mul!, adjoint"] = @benchmarkable mul!($m, ($J)', $d)
+SUITE["DBlock, homogeneous, block diagonal"]["mul, adjoint"] = @benchmarkable ($J)' * $d
+SUITE["DBlock, homogeneous, block diagonal"]["adjoint"] = @benchmarkable $(J)'
+SUITE["DBlock, homogeneous, block diagonal"]["shape"] = @benchmarkable shape($F)
+SUITE["DBlock, homogeneous, block diagonal"]["size"] = @benchmarkable size($F)
+SUITE["DBlock, homogeneous, block diagonal"]["domain"] = @benchmarkable domain($F)
+SUITE["DBlock, homogeneous, block diagonal"]["range"] = @benchmarkable range($F)
+SUITE["DBlock, homogeneous, block diagonal"]["dom,block"] = @benchmarkable getblock($m, 3)
+SUITE["DBlock, homogeneous, block diagonal"]["dom,block!"] = @benchmarkable setblock!($m, 3, $(rand(100)))
+SUITE["DBlock, homogeneous, block diagonal"]["rng,block"] = @benchmarkable getblock($d, 10)
+SUITE["DBlock, homogeneous, block diagonal"]["rng,block!"] = @benchmarkable setblock!($d, 10, $(rand(100)))
