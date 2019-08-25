@@ -177,8 +177,9 @@ end
 function buildblocks(I,ρ_futures)
     io = jsopen("data.js")
     ρ = localpart(ρ_futures)
-    [buildblock(ishot,ρ,io) for ishot in I[1], j in 1:1]
+    F = [buildblock(ishot,ρ,io) for ishot in I[1], j in 1:1]
     close(io)
+    F
 end
 
 io = jsopen("data.js")
