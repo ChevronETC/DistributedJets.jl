@@ -78,6 +78,7 @@ DistributedArrays.localpart(R::JetDSpace) = localpart(R.blkspaces)[1]
 localblockindices(R::JetDSpace) = R.blkindices[findfirst(pid->pid==myid(), procs(R))]
 localblockindices(R::Jets.JetBSpace) = 1:length(R.indices)
 localblockindices(R::Jets.JetAbstractSpace) = 1:1
+blockmap(R::JetDSpace) = R.blkindices
 
 Distributed.procs(R::JetDSpace) = procs(R.blkspaces)
 Distributed.nprocs(R::JetDSpace) = length(procs(R.blkspaces))
@@ -166,6 +167,7 @@ Distributed.nprocs(x::DBArray) = length(procs(x))
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
 DistributedArrays.localindices(x::DBArray) = x.indices[findfirst(ipid->ipid==myid(), procs(x))]
 localblockindices(x::DBArray) = x.blkindices[findfirst(ipid->ipid==myid(), procs(x))]
+blockmap(x::DBArray) = x.blkindices
 
 function Base.collect(x::DBArray{T,A}) where {T,B,A<:Jets.BlockArray{T,B}}
     _x = B[]

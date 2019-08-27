@@ -49,7 +49,7 @@ end
     R = JetDSpace(blkspaces)
     @test length(R) == 8
     @test nblocks(R) == 4
-    @test R.blkindices == [1:2,3:4]
+    @test blockmap(R) == [1:2,3:4]
     @test R.indices == [1:4,5:8]
 end
 
@@ -131,6 +131,7 @@ end
     @test size(d) == size(_d)
     @test d.darray.cuts == _d.cuts
     @test d.darray.indices == _d.indices
+    @test blockmap(d) == [1:2,3:4]
 
     @test remotecall_fetch(localindices, workers()[1], R) == 1:12
     @test remotecall_fetch(localindices, workers()[2], R) == 13:24
