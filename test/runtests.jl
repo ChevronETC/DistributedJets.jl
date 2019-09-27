@@ -329,7 +329,7 @@ end
     @test J'*δd ≈ _J'*collect(δd)
 end
 
-@testset "JopDBlock, distributed->distributed, block diagonal" begin
+@testset "JopDBlock, distributed->distributed, block diagonal, square blocks" begin
     _F = DArray(I->[i==j ? JopBar(10) : JopZeroBlock(JetSpace(Float64,10),JetSpace(Float64,10)) for i in I[1], j in I[2]], (4,4), workers(), [4,1])
     F = @blockop _F isdiag=true
 
@@ -351,6 +351,24 @@ end
     @test collect(J*δm) ≈ _J*collect(δm)
     δd = rand(range(J))
     @test collect(J'*δd) ≈ _J'*collect(δd)
+end
+
+@testset "JopDBlock, distributed->distributed, block diagonal, tall blocks" begin
+    _A = DArray(I->[i==j ? JopBaz(rand(10,5)) : JopZeroBlock(JetSpace(Float64,5),JetSpace(Float64,10)) for i in I[1], j in I[2]], (4,4), workers(), [4,1])
+    A = @blockop _A isdiag=true
+
+    _B = [_A[i,j] for i in 1:4, j in 1:4]
+    B = @blockop _B
+
+    @test isa(A, JopLn{<:Jet{<:DistributedJets.JetDSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    @test ones(range(A)) ≈ DArray(I->ones(length(I[1])), procs(_A), [1:10,11:20,21:30,31:40])
+    @test ones(domain(A)) ≈ DArray(I->ones(length(I[1])), procs(_A), [1:5,6:10,11:15,16:20])
+
+    m = rand(domain(A))
+    @test collect(A*m) ≈ B*collect(m)
+    d = rand(range(A))
+    @test collect(A'*d) ≈ B'*collect(d)
 end
 
 @testset "JopDBlock, heterogeneous, distributed->distributed" begin
