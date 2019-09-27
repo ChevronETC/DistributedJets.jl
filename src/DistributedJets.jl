@@ -249,7 +249,7 @@ function JetDBlock_build(I, ops::DArray{T,2}, dadom) where {T<:Jop}
     irng = indices(ops, 1)[I[1][1]]
     jrng = indices(ops, 2)[I[2][1]]
     _ops = T[ops[i,j] for i in irng, j in jrng]
-    [Jets.JopBlock(_ops, dadom) for k=1:1, l=1:1]
+    [Jets.JopBlock(_ops; dadom=dadom) for k=1:1, l=1:1]
 end
 
 JetDBlock_countidxs(spaces) = length(localpart(spaces)[1])
@@ -292,6 +292,18 @@ function JetDBlock_space(blkspaces, blkidxs, idxs)
     JetDSpace(blkspaces, blkidxs, idxs)
 end
 
+function localpart_diag_darray_spaces(_ops)
+    ops = state(localpart(_ops)[1]).ops
+    for j = 1:size(ops,1)
+        opsj = @view ops[j,:]
+        s = mapreduce(!iszero, +, opsj)
+        s == 1 || error("Expecting one non-zero column block per row in block diagonal construction, got $s.")
+    end
+    ops = state(localpart(_ops)[1]).ops[:,1:1]
+    A = @blockop ops dadom=true
+    domain(A)
+end
+
 function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="", isdiag=false) where {T<:Jop}
     pids = procs(ops)
 
@@ -302,7 +314,15 @@ function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="", isdiag=false) where {T
     _ops = DArray(I->JetDBlock_build(I, ops, n2 > 1), (n1,n2), pids[:], [n1,n2])
 
     blkspaces_rng = DArray(I->[range(localpart(_ops)[1]) for i in I[1]], (n1,), pids[:,1], [n1])
-    blkspaces_dom = isdiag ? blkspaces_rng : DArray(I->[domain(localpart(_ops)[1]) for i in I[1]], (n2,), pids[1,:], [n2])
+
+    local blkspaces_dom
+    if isdiag
+        # TODO: fragile
+        # assumption that there is only one column block per block-diagnol block
+        blkspaces_dom = DArray(I->[localpart_diag_darray_spaces(_ops) for i in I[1]], (n1,), pids[:,1], [n1])
+    else
+        blkspaces_dom = DArray(I->[domain(localpart(_ops)[1]) for i in I[1]], (n2,), pids[1,:], [n2])
+    end
 
     countidxs_dom,countblks_dom = JetDBlock_count_idxs_blks(blkspaces_dom)
     countidxs_rng,countblks_rng = JetDBlock_count_idxs_blks(blkspaces_rng)
