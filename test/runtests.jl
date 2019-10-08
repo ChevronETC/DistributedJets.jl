@@ -196,6 +196,12 @@ end
     for i = 1:length(d)
         @test d[i] ≈ α
     end
+
+    d₁ .= 3.14
+
+    for i = 1:length(d₁)
+        @test d₁[i] ≈ 3.14
+    end
 end
 
 @testset "DBArray broadcasting, 2D arrays" begin
@@ -219,6 +225,11 @@ end
 
     for i = 1:length(d)
         @test d[i] ≈ α
+    end
+
+    d₁ .= 3.14
+    for i = 1:length(d₁)
+        @test d₁[i] ≈ 3.14
     end
 end
 

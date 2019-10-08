@@ -186,6 +186,15 @@ end
 
 Base.convert(::Jets.BlockArray, x::DBArray) = collect(x)
 Base.convert(::Array, x::DBArray) = convert(Array, collect(x))
+
+DBArray_local_fill!(x::DBArray, a) = fill!(localpart(x), a)
+
+function Base.fill!(x::DBArray, a)
+    @sync for pid in procs(x)
+        @async remotecall_fetch(DBArray_local_fill!, pid, x, a)
+    end
+    x
+end
 # -->
 
 # DBArray broadcasting implementation --<
