@@ -89,6 +89,43 @@ struct DBArray{T,A<:Jets.BlockArray{T},B} <: AbstractArray{T,1}
     blkindices::Vector{UnitRange{Int}}
 end
 
+function DBArray_localpart(f, blkidxs)
+    arrays = [f(blkidx) for blkidx in blkidxs]
+    indices = Vector{UnitRange{Int}}(undef, length(blkidxs))
+
+    ibeg = 1
+    for i = 1:length(arrays)
+        iend = ibeg + length(arrays[i]) - 1
+        indices[i] = ibeg:iend
+        ibeg = iend + 1
+    end
+
+    Jets.BlockArray(arrays, indices)
+end
+
+DBArray_local_length(future) = length(fetch(future))
+
+function DBArray(f::Function, nblks::Tuple, pids::AbstractArray, dist::AbstractArray)
+    blkidxs, cuts = DistributedArrays.chunk_idxs([nblks...], dist) # cuts is not used
+    futures = Dict{Int,Future}()
+    for (ipid,pid) in enumerate(pids)
+        futures[pid] = remotecall(DBArray_localpart, pid, f, blkidxs[ipid][1])
+    end
+
+    idxs = Vector{UnitRange{Int}}(undef, length(pids))
+    ibeg = 1
+    for (ipid,pid) in enumerate(pids)
+        iend = ibeg + remotecall_fetch(DBArray_local_length, pid, futures[pid]) - 1
+        idxs[ipid] = ibeg:iend
+        ibeg = iend + 1
+    end
+
+    darray = DArray(i->[fetch(futures[myid()])], pids, idxs)
+    DBArray(darray, idxs, [blkidx[1] for blkidx in blkidxs])
+end
+DBArray(f::Function, nblks::Tuple, pids::AbstractArray) = DBArray(f, nblks, pids, DistributedArrays.defaultdist(nblks, pids))
+DBArray(f::Function, nblks::Tuple) = DBArray(f, nblks, workers()[1:min(nworkers(),nblks[1])], DistributedArrays.defaultdist(nblks, workers()[1:min(nworkers(),nblks[1])]))
+
 # DBArray array interface implementation <--
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()
 Base.size(x::DBArray) = (x.indices[end][end],)
@@ -689,6 +726,6 @@ Jets.getblock(A::JopAdjoint{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.Jet
 Jets.getblock(::Type{JopLn}, A::Jop{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = JopLn(getblock(A, i, j))
 Jets.getblock(::Type{JopNl}, F::Jop{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = getblock(F, i, j)::JopNl
 
-export JetDSpace, blockmap, blockproc, localblockindices
+export DBArray, JetDSpace, blockmap, blockproc, localblockindices
 
 end
