@@ -73,6 +73,17 @@ nprocs(R) # number of Julia process associated with R
 procs(R) # Julia processes associated with R
 ```
 
+## Constructing a distributed block array
+The intent of this package is to be operator-centric so that a `DBArray` is
+constructed from the range or domain of an operator.  However, on occasion
+it may be useful to construct a `DBArray` independent of an operator:
+```
+A = DBArray(f, (nblks,)[, pids])
+```
+where `f` is a function for computing the ith block.  For example, `f(i)=i*rand(2)`.
+`nblks` is the number of blocks.  `pids::Vector` is an optional parameter and is the
+workers to distribute the blocks across (it defaults to `Distributed.workers()`).
+
 ## Methods for distributed block arrays
 The following methods are defined for distributed block arrays,
 ```julia

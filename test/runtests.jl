@@ -146,6 +146,36 @@ end
     @test remotecall_fetch(getblock!, workers()[1], d, 1, x) ≈ [π π π; π π π]
 end
 
+@testset "DBArray, construction" begin
+    @everywhere foo(i) = rem(i,2) == 0 ? i*π*ones(2) : i*π*ones(3)
+    nblks = 7
+    A = DBArray(foo, (nblks,), workers(), [4])
+    B = DBArray(foo, (nblks,), workers())
+    C = DBArray(foo, (nblks,))
+
+    @test A ≈ B
+    @test A ≈ C
+
+    @test A.blkindices == B.blkindices
+    @test A.blkindices == C.blkindices
+    @test A.indices == B.indices
+    @test A.indices == C.indices
+
+    for iblock in 1:nblocks(A)
+        a = getblock(A, iblock)
+        b = getblock(B, iblock)
+        c = getblock(C, iblock)
+        n = length(a)
+        m = rem(iblock,2) == 0 ? 2 : 3
+        @test n == m
+        @test length(b) == n
+        @test length(c) == n
+        @test a ≈ iblock*π*ones(m)
+        @test b ≈ a
+        @test c ≈ a
+    end
+end
+
 @testset "DBArray, inner product" begin
     A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
     d₁ = rand(range(A))
