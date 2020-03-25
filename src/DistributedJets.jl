@@ -103,7 +103,11 @@ function DBArray_localpart(f, blkidxs)
     Jets.BlockArray(arrays, indices)
 end
 
-DBArray_local_length(future) = length(fetch(future))
+function DBArray_local_length(future)
+    x = fetch(future)
+    isa(x, RemoteException) && throw(x)
+    length(x)
+end
 
 function DBArray(f::Function, nblks::Tuple, pids::AbstractArray, dist::AbstractArray)
     blkidxs, cuts = DistributedArrays.chunk_idxs([nblks...], dist) # cuts is not used
