@@ -109,11 +109,10 @@ function DBArray_local_length(future)
     length(x)
 end
 
-function DBArray(f::Function, nblks::Tuple, pids::AbstractArray, dist::AbstractArray)
-    blkidxs, cuts = DistributedArrays.chunk_idxs([nblks...], dist) # cuts is not used
+function DBArray(f::Function, blkidxs::Vector{UnitRange{Int}}, pids=workers())
     futures = Dict{Int,Future}()
     for (ipid,pid) in enumerate(pids)
-        futures[pid] = remotecall(DBArray_localpart, pid, f, blkidxs[ipid][1])
+        futures[pid] = remotecall(DBArray_localpart, pid, f, blkidxs[ipid])
     end
 
     idxs = Vector{UnitRange{Int}}(undef, length(pids))
@@ -125,8 +124,14 @@ function DBArray(f::Function, nblks::Tuple, pids::AbstractArray, dist::AbstractA
     end
 
     darray = DArray(i->[fetch(futures[myid()])], pids, idxs)
-    DBArray(darray, idxs, [blkidx[1] for blkidx in blkidxs])
+    DBArray(darray, idxs, blkidxs)
 end
+
+function DBArray(f::Function, nblks::Tuple, pids::AbstractArray, dist::AbstractArray)
+    blkidxs, cuts = DistributedArrays.chunk_idxs([nblks...], dist) # cuts is not used
+    DBArray(f, [blkidx[1] for blkidx in blkidxs], pids)
+end
+
 DBArray(f::Function, nblks::Tuple, pids::AbstractArray) = DBArray(f, nblks, pids, DistributedArrays.defaultdist(nblks, pids))
 DBArray(f::Function, nblks::Tuple) = DBArray(f, nblks, workers()[1:min(nworkers(),nblks[1])], DistributedArrays.defaultdist(nblks, workers()[1:min(nworkers(),nblks[1])]))
 

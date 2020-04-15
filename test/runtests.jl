@@ -152,27 +152,48 @@ end
     A = DBArray(foo, (nblks,), workers(), [4])
     B = DBArray(foo, (nblks,), workers())
     C = DBArray(foo, (nblks,))
+    D = DBArray(foo, blockmap(A))
+    E = DBArray(foo, [1:1,2:2,3:3,4:7])
+
+    blockmap(E)
+
+    E.blkindices
+    E.indices
 
     @test A ≈ B
     @test A ≈ C
+    @test A ≈ D
+    for i = 1:18
+        @test A[i] ≈ E[i]
+    end
 
     @test A.blkindices == B.blkindices
     @test A.blkindices == C.blkindices
+    @test A.blkindices == D.blkindices
+    @test A.blkindices != E.blkindices
     @test A.indices == B.indices
     @test A.indices == C.indices
+    @test A.indices == D.indices
+    @test A.indices != E.indices
 
     for iblock in 1:nblocks(A)
         a = getblock(A, iblock)
         b = getblock(B, iblock)
         c = getblock(C, iblock)
+        d = getblock(D, iblock)
+        e = getblock(E, iblock)
         n = length(a)
         m = rem(iblock,2) == 0 ? 2 : 3
         @test n == m
         @test length(b) == n
         @test length(c) == n
+        @test length(d) == n
+        @test length(e) == n
         @test a ≈ iblock*π*ones(m)
         @test b ≈ a
         @test c ≈ a
+        @test d ≈ a
+        @test e ≈ a
     end
 end
 
