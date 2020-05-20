@@ -2,6 +2,7 @@ using Distributed
 
 #Need to remove all procs before running these tests
 addprocs(4)
+
 @everywhere using DistributedArrays, DistributedJets, JSON, Jets, LinearAlgebra, Test
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
@@ -555,6 +556,19 @@ end
     @test s["step"][3]["pid"][2]["operation"] == "df′"
 
     rm("stats.json", force=true)
+end
+
+@testset "block operator composed with operator" begin
+    A₁ = JopFoo(rand(2))
+    A₂ = @blockop DArray(I->[JopBar(2) for i in I[1], j in I[2]], (2,1))
+    A = A₂ ∘ A₁
+
+    m = rand(domain(A))
+    d = A*m
+    A₁₁ = getblock(A, 1, 1)
+    A₂₁ = getblock(A, 2, 1)
+    @test getblock(d,1) ≈ A₂₁ * m
+    @test getblock(d,2) ≈ A₂₁ * m
 end
 
 rmprocs(workers())
