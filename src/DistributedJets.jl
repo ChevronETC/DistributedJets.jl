@@ -733,6 +733,15 @@ Jets.isblockop(A::Jop{<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlo
 
 Jets.getblock(jet::Jet{D,R,typeof(JetDBlock_f!)}, i, j) where {D,R} = getblock(state(jet).ops, blockmap(jet), i, j)
 
+close_localpart(ops::DArray) = close(localpart(ops)[1])
+
+function Base.close(j::Jet{D,R,typeof(JetDBlock_f!)}) where {D,R}
+    ops = state(j).ops
+    @sync for pid in procs(ops)
+        @async remotecall_fetch(close_localpart, pid, ops)
+    end
+end
+
 export DBArray, JetDSpace, blockmap, localblockindices
 
 end

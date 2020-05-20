@@ -11,6 +11,14 @@ addprocs(4)
     JopLn(;df! = JopFoo_df!, df′! = JopFoo_df!, dom = spc, rng = spc, s = (diagonal=diag,))
 end
 
+@everywhere JopClose_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
+@everywhere function JopClose(diag)
+    spc = JetSpace(Float64, size(diag))
+    file = touch(tempname())
+    JopLn(;df! = JopClose_df!, dom = spc, rng = spc, s = (diagonal=diag, file=file))
+end
+@everywhere Base.close(J::Jet{D,R,typeof(JopClose_df!)}) where {D,R} = rm(state(J).file)
+
 @everywhere JopBar_f!(d,m) = d .= m.^2
 @everywhere JopBar_df!(δd,δm;mₒ,kwargs...) = δd .= 2 .* mₒ .* δm
 @everywhere function JopBar(n)
@@ -569,6 +577,17 @@ end
     A₂₁ = getblock(A, 2, 1)
     @test getblock(d,1) ≈ A₂₁ * m
     @test getblock(d,2) ≈ A₂₁ * m
+end
+
+@testset "block operators with close" begin
+    A = @blockop DArray(I->[JopClose(2) for i in I[1], j in I[2]], (2,1))
+    A₁ = getblock(A,1,1)
+    A₂ = getblock(A,2,1)
+    @test isfile(state(A₁).file)
+    @test isfile(state(A₂).file)
+    close(A)
+    @test !isfile(state(A₁).file)
+    @test !isfile(state(A₂).file)
 end
 
 rmprocs(workers())
