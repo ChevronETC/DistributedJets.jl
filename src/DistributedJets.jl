@@ -729,12 +729,10 @@ function Jets.getblock(ops::DArray, blkmap, i::Integer, j::Integer)
     remotecall_fetch(JetDBlock_local_getblock, pid, ops, i - blkmap[ipid,jpid][1][1] + 1, j - blkmap[ipid,jpid][2][1] + 1)
 end
 
-Jets.getblock(op::Jop{T}, i::Integer, j::Integer) where {D,R,T<:Jet{D,R,typeof(JetDBlock_f!)}} = getblock(state(op).ops, blockmap(op), i, j)
-Jets.getblock(A::JopAdjoint{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = JopLn(getblock(A.op, j, i))'
+Jets.isblockop(A::Jop{<:Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(JetDBlock_f!)}}) = true
 
-Jets.getblock(::Type{JopLn}, A::Jop{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = JopLn(getblock(A, i, j))
-Jets.getblock(::Type{JopNl}, F::Jop{T}, i::Integer, j::Integer) where {T<:Jet{<:Jets.JetAbstractSpace,<:Jets.JetAbstractSpace,typeof(JetDBlock_f!)}} = getblock(F, i, j)::JopNl
+Jets.getblock(jet::Jet{D,R,typeof(JetDBlock_f!)}, i, j) where {D,R} = getblock(state(jet).ops, blockmap(jet), i, j)
 
-export DBArray, JetDSpace, blockmap, blockproc, localblockindices
+export DBArray, JetDSpace, blockmap, localblockindices
 
 end
