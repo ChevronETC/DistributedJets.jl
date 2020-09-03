@@ -712,6 +712,10 @@ localblockindices(j::Jet{D,R,typeof(JetDBlock_f!)}, i) where {D,R} = localblocki
 localblockindices(A::T) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localblockindices(jet(A))
 localblockindices(A::T, i) where {D,R,J<:Jet{D,R,typeof(JetDBlock_f!)},T<:Jop{J}} = localblockindices(jet(A), i)
 
+localblockindices(j::Jet{D,R,typeof(Jets.JetComposite_f!)}) where {D,R} = error("localblockindices does not support composite operators; consider using `localblockindices(range(F))` or `localblockindices(domain(F))`")
+localblockindices(A::T) where {D,R,J<:Jet{D,R,typeof(Jets.JetComposite_f!)},T<:Jop{J}} = localblockindices(jet(A))
+localblockindices(A::T, i) where {D,R,J<:Jet{D,R,typeof(Jets.JetComposite_f!)},T<:Jop{J}} = localblockindices(jet(A))
+
 blockmap(jet::T) where {D,R,T<:Jet{D,R,typeof(JetDBlock_f!)}} = state(jet).blockmap
 blockmap(op::Jop) = blockmap(jet(op))
 

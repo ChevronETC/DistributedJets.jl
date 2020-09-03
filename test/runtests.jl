@@ -590,4 +590,11 @@ end
     @test !isfile(state(A₂).file)
 end
 
+@testset "localblockindices for composite operators" begin
+    A = @blockop DArray(I->[JopBar(2) for i in I[1], j in I[2]], (2,1))
+    B = JopBar(2)
+    C = A ∘ B
+    @test_throws RemoteException remotecall_fetch(localblockindices, workers()[1], C)
+end
+
 rmprocs(workers())
