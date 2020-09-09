@@ -1,4 +1,4 @@
-The AbstractStorage.jl package is licensed under the MIT "Expat" License:
+The DistributedJets.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2020: Chevron U.S.A. Inc.
 >
