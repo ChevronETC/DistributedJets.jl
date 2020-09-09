@@ -1,3 +1,6 @@
+| **Documentation**                                                               |
+|:-------------------------------------------------------------------------------:|
+| [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://chevronetc.github.io/DistributedJets.jl/dev/) |
 # DistributedJets.jl
 
 This package contains distributed block operators and vectors for Jets.jl.  It
