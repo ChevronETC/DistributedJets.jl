@@ -1,6 +1,6 @@
 The AbstractStorage.jl package is licensed under the MIT "Expat" License:
 
-> Copyright (c) 2020: CChevron U.S.A. Inc.
+> Copyright (c) 2020: Chevron U.S.A. Inc.
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
