@@ -66,18 +66,35 @@ function JetDSpace(blkspaces::DArray{S,1}) where {S<:JetBSpace}
     JetDSpace(blkspaces, blkindices, indices)
 end
 
+"""
+    size(R)
+returns the size of R
+"""
 Base.size(R::JetDSpace) = (R.indices[end][end],)
+"""
+    eltype(R)
+returns the element type of R 
+"""
 Base.eltype(R::Type{JetDSpace{T,S}}) where {T,S} = T
 Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
 
 Jets.indices(R::JetDSpace) = R.indices
 Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
 Jets.nblocks(R::JetDSpace) = R.blkindices[end][end]
+
 DistributedArrays.localindices(R::JetDSpace) = R.indices[findfirst(pid->pid==myid(), procs(R))]
 DistributedArrays.localpart(R::JetDSpace) = localpart(R.blkspaces)[1]
+"""
+    localblockindices(R)
+returns the block indicies that are local to the calling process
+"""
 localblockindices(R::JetDSpace) = R.blkindices[findfirst(pid->pid==myid(), procs(R))]
 localblockindices(R::Jets.JetBSpace) = 1:length(R.indices)
 localblockindices(R::Jets.JetAbstractSpace) = 1:1
+"""
+    blockmap(A)
+returns map between process id and block indicies
+"""
 blockmap(R::JetDSpace) = R.blkindices
 
 Distributed.procs(R::JetDSpace) = procs(R.blkspaces)
@@ -208,13 +225,29 @@ end
 
 _localpart(x::DBArray) = localpart(x.darray)
 DistributedArrays.localpart(x::DBArray) = _localpart(x)[1]::Jets.BlockArray
+"""
+    procs(R)
+returns Julia processes associated with R
+"""
 Distributed.procs(x::DBArray) = procs(x.darray)
+"""
+    nprocs(R)
+returns the number of Julia processes associated with R
+"""
 Distributed.nprocs(x::DBArray) = length(procs(x))
 Jets.nblocks(x::DBArray) = x.blkindices[end][end]
+"""
+    localindices(R)
+returns the indicies of R that are local to the calling process
+"""
 DistributedArrays.localindices(x::DBArray) = x.indices[findfirst(ipid->ipid==myid(), procs(x))]
 localblockindices(x::DBArray) = x.blkindices[findfirst(ipid->ipid==myid(), procs(x))]
 blockmap(x::DBArray) = x.blkindices
 
+"""
+    collect(d)
+collect the block array `d` to the calling process, returning a block array
+"""
 function Base.collect(x::DBArray{T,A}) where {T,B,A<:Jets.BlockArray{T,B}}
     _x = B[]
     _indices = UnitRange{Int}[]
@@ -230,6 +263,10 @@ function Base.collect(x::DBArray{T,A}) where {T,B,A<:Jets.BlockArray{T,B}}
     Jets.BlockArray(_x, _indices)
 end
 
+"""
+    convert(Array,d)
+collect the block array `d` and convert it to a Julia array
+"""
 Base.convert(::Jets.BlockArray, x::DBArray) = collect(x)
 Base.convert(::Array, x::DBArray) = convert(Array, collect(x))
 
@@ -279,10 +316,18 @@ for f in (:Array, :ones, :rand, :zeros)
 end
 
 getblocklocal(x::DBArray, δblock) = getblock(localpart(x), δblock)
+"""
+    getblock(d,i)
+retrive block i from a distributed block operator
+"""
 function Jets.getblock(x::DBArray{T,A}, iblock::Integer) where {T,B,A<:Jets.BlockArray{T,B}}
     ipid = findfirst(rng->iblock∈rng, x.blkindices)
     remotecall_fetch(getblocklocal, procs(x)[ipid], x, iblock - x.blkindices[ipid][1] + 1)::B
 end
+"""
+    getblock!(d, i, x)
+get block `i::Int` and put it into `x`
+"""
 function Jets.getblock!(x::DBArray{T,A}, iblock::Integer, xblock::AbstractArray) where {T,B,A<:Jets.BlockArray{T,B}}
     ipid = findfirst(rng->iblock∈rng, x.blkindices)::Int
     xblock .= remotecall_fetch(getblocklocal, procs(x)[ipid], x, iblock - x.blkindices[ipid][1] + 1)::B
@@ -292,6 +337,10 @@ function setblocklocal!(x::DBArray, δblock::Integer, xblock)
     setblock!(localpart(x), δblock, xblock)
     nothing
 end
+"""
+    setblock!(d,i,x)
+put `x` into block `i::Int`
+"""
 function Jets.setblock!(x::DBArray, iblock::Integer, xblock)
     ipid = findfirst(rng->iblock∈rng, x.blkindices)::Int
     remotecall_fetch(setblocklocal!, procs(x)[ipid], x, iblock - x.blkindices[ipid][1] + 1, xblock)
