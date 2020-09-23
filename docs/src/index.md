@@ -1,7 +1,8 @@
 # DistributedJets.jl
 
-This package contains distributed block operators and vectors for Jets.jl.  It
-builds on top of the block operators in Jets.jl, providing a parallel distributed
+This package contains distributed block operators and vectors for
+[Jets.jl](https://github.com/ChevronETC/Jets.jl).  It builds on top
+of the block operators in Jets.jl, providing a parallel distributed
 version of block operators and block vectors that are used to orchestrate
 distributed (in-memory) storage and compute.
 
@@ -165,10 +166,10 @@ Note that the above can be done in a single line. Above lines are meant to illus
 
 ## Create a block wavefield modeling operator from the geometry in a JavaSeis file
 ```julia
-Pkg.add(["Distributed","DistributedArrays","DistributedJets","Jets","JetPackWave","TeaSeis","ParallelOperations"])
+Pkg.add(["Distributed","DistributedArrays","DistributedJets","DistributedOperations,"Jets","JetPackWave","TeaSeis""])
 using Distributed
 addprocs(2)
-@everywhere using DistributedArrays,DistributedJets,Jets,JetPackWave,TeaSeis,ParallelOperations
+@everywhere using DistributedArrays,DistributedJets,DistributedOperations,Jets,JetPackWave,TeaSeis
 
 function buildblock(ishot,ρ,io)
     h = readframehdrs(io,ishot)

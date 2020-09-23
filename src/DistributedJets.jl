@@ -1,6 +1,6 @@
 module DistributedJets
 
-using Distributed, DistributedArrays, JSON, Jets, LinearAlgebra, ParallelOperations, Statistics
+using Distributed, DistributedArrays, DistributedOperations, JSON, Jets, LinearAlgebra, Statistics
 
 #
 # DArray extensions
