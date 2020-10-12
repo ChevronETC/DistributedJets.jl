@@ -2,6 +2,37 @@ module DistributedJets
 
 using Distributed, DistributedArrays, DistributedOperations, JSON, Jets, LinearAlgebra, Statistics
 
+@doc """
+    Jets.@blockop(ex, kwargs)
+
+Construct a distributed `Jets` block operator, a combination of Jet operators
+analogous to a block matrix. Operators are distributed to workers using Julia's
+`DistributedArray`.
+
+# Examples
+
+## Example with 1 row-block and 3 column-blocks distributed by column on 3 workers:
+```julia
+using Pkg
+pkg"add Jets JetPack DistributedArrays DistributedJets"
+using Distributed
+addprocs(3)
+@everywhere using Jets, JetPack, DistributedArrays, DistributedJets
+A = @blockop DArray(I->[JopDiagonal(rand(2)) for irow in I[1], icol in I[2]], (1,3), workers(), [1,3])
+```
+
+## Example with 2 row-block and 3 column-blocks distributed by column on 3 workers:
+```
+using Pkg
+pkg"add Jets JetPack DistributedArrays DistributedJets"
+using Distributed
+addprocs(3)
+@everywhere using Jets, JetPack, DistributedArrays, DistributedJets
+A = @blockop DArray(I->[JopDiagonal(rand(2)) for irow in I[1], icol in I[2]], (2,3), workers(), [1,3])
+```
+"""
+macro Jets.blockop end
+
 #
 # DArray extensions
 #
