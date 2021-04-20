@@ -597,4 +597,25 @@ end
     @test_throws RemoteException remotecall_fetch(localblockindices, workers()[1], C)
 end
 
+@testset "vectorized operators" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (2,1))
+    x = rand(domain(A))
+
+    @test size(vec(domain(A))) == (2*3,)
+    @test size(vec(range(A))) == (2*2*3,)
+    @test size(range(A)) == size(vec(range(A)))
+
+    B = vec(A)
+    @test isa(jet(B), Jet{<:JetAbstractSpace,<:JetAbstractSpace,typeof(Jets.JetVec_f!)})
+
+    d = A * x
+    _d = vec(A) * vec(x)
+    @test d ≈ _d
+
+    a = A' * d
+    _a = vec(A') * d
+    __a = reshape(_a, domain(A))
+    @test a ≈ __a
+end
+
 rmprocs(workers())
