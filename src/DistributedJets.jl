@@ -173,6 +173,8 @@ function Base.similar(x::DBArray, ::Type{T}) where {T}
     DBArray(darray, x.indices, x.blkindices)
 end
 Base.similar(x::DBArray{T}) where {T} = similar(x, T)
+Base.similar(x::DBArray, ::Type{T}, n::Integer) where {T} = length(x) == n ? similar(x, T) : Array{T}(undef, n)
+Base.similar(x::DBArray, ::Type{T}, dims::Tuple{Int}) where {T} = similar(x, T, dims[1])
 
 DBArray_local_norm(x::DBArray, p) = norm(localpart(x), p)
 
