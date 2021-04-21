@@ -77,6 +77,7 @@ returns the element type of R
 """
 Base.eltype(R::Type{JetDSpace{T,S}}) where {T,S} = T
 Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
+Base.vec(R::JetDSpace) = R
 
 Jets.indices(R::JetDSpace) = R.indices
 Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
@@ -276,6 +277,12 @@ function Base.fill!(x::DBArray, a)
     @sync for pid in procs(x)
         @async remotecall_fetch(DBArray_local_fill!, pid, x, a)
     end
+    x
+end
+
+# DBArrays are vectors
+function Base.reshape(x::DBArray, R::JetDSpace)
+    length(x) == length(R) || error("dimension mismatch, unable to reshap distributed block arrays")
     x
 end
 # -->
