@@ -112,6 +112,10 @@ end
     @test isa(y, DistributedJets.DBArray{Float64})
     z = similar(d, Float32)
     @test isa(z, DistributedJets.DBArray{Float32})
+    _z = similar(d, Float32, length(y))
+    @test isa(_z, DistributedJets.DBArray{Float32})
+    __z = similar(d, Float32, (length(y),))
+    @test isa(__z, DistributedJets.DBArray{Float32})
 
     @test remotecall_fetch(localindices, workers()[1], R) == 1:2
     @test remotecall_fetch(localindices, workers()[2], R) == 3:4
