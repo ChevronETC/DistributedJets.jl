@@ -1,6 +1,6 @@
 using Distributed
 addprocs(6)
-@everywhere using BenchmarkTools, DistributedArrays, DistributedJets, Jets, LinearAlgebra
+@everywhere using BenchmarkTools, DistributedArrays, DistributedJets, Jets, LinearAlgebra, Statistics
 
 const SUITE = BenchmarkGroup()
 
@@ -31,6 +31,9 @@ SUITE["DBArray"] = BenchmarkGroup()
 SUITE["DBArray"]["construct"] = @benchmarkable rand($rangeF)
 SUITE["DBArray"]["norm"] = @benchmarkable norm($d₁)
 SUITE["DBArray"]["dot"] = @benchmarkable dot($d₁,$d₂)
+SUITE["DBArray"]["mean"] = @benchmarkable mean($d₁)
+SUITE["DBArray"]["var"] = @benchmarkable var($d₁)
+SUITE["DBArray"]["var, mean"] = @benchmarkable var($d₁; mean=1.0)
 SUITE["DBArray"]["extrema"] = @benchmarkable extrema($d₁)
 SUITE["DBArray"]["broadcasting"] = @benchmarkable d₄ .= α₁*d₁ .+ α₂*d₂ .- α₃*d₃
 

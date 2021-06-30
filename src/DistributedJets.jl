@@ -226,6 +226,39 @@ function Base.extrema(x::DBArray{T}) where {T}
     minimum(mn),maximum(mx)
 end
 
+DBArray_local_mean(x::DBArray) = sum(localpart(x))
+
+function Statistics.mean(x::DBArray{T}) where {T}
+    pids = procs(x)
+    y = zeros(T, length(pids))
+    @sync for (ipid,pid) in enumerate(pids)
+        @async begin
+            y[ipid] = remotecall_fetch(DBArray_local_mean, pid, x)
+        end
+    end
+    sum(y) / length(x)
+end
+
+DBArray_local_var(x::DBArray, μ) = sum((localpart(x) .- μ).^2)
+
+function Statistics.var(x::DBArray{T}; corrected=true, mean=nothing) where {T}
+    pids = procs(x)
+    μ = mean === nothing ? Statistics.mean(x) : mean
+    y = zeros(T, length(pids))
+    @sync for (ipid,pid) in enumerate(pids)
+        @async begin
+            y[ipid] = remotecall_fetch(DBArray_local_var, pid, x, μ)
+        end
+    end
+    σ² = sum(y)
+    if corrected
+        σ² /= (length(x) - 1)
+    else
+        σ² /= length(x)
+    end
+    σ²
+end
+
 _localpart(x::DBArray) = localpart(x.darray)
 DistributedArrays.localpart(x::DBArray) = _localpart(x)[1]::Jets.BlockArray
 """
