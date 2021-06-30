@@ -413,8 +413,8 @@ function localpart_diag_darray_spaces(_ops)
         s == 1 || error("Expecting one non-zero column block per row in block diagonal construction, got $s.")
     end
     ops = state(localpart(_ops)[1]).ops[:,1:1]
-    A = @blockop ops dadom=true
-    domain(A)
+    A = @blockop adjoint.(JopLn.(jet.(ops))) dadom=true
+    range(A)
 end
 
 function Jets.JetBlock(ops::DArray{T,2}; perfstatfile="", isdiag=false) where {T<:Jop}
