@@ -446,6 +446,21 @@ end
     @test collect(A'*d) ≈ B'*collect(d)
 end
 
+@testset "JopDBlock, distributed->distributed, block diagonal, number of blocks different from number of procs" begin
+    _A = DArray(I->[i==j ? JopBaz(rand(10,5)) : JopZeroBlock(JetSpace(Float64,5),JetSpace(Float64,10)) for i in I[1], j in I[2]], (10,10), workers(), [4,1])
+    A = @blockop _A isdiag=true
+
+    _B = [_A[i,j] for i in 1:10, j in 1:10]
+    B = @blockop _B
+
+    @test isa(A, JopLn{<:Jet{<:DistributedJets.JetDSpace,<:DistributedJets.JetDSpace,typeof(DistributedJets.JetDBlock_f!)}})
+
+    m = rand(domain(A))
+    @test collect(A*m) ≈ B*collect(m)
+    d = rand(range(A))
+    @test collect(A'*d) ≈ B'*collect(d)
+end
+
 @testset "JopDBlock, heterogeneous, distributed->distributed" begin
     _F = DArray(I->Jop[myblocks(i,j) for i in I[1], j in I[2]], (3,5), workers(), [2,2])
     F = @blockop _F
