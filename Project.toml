@@ -1,6 +1,6 @@
 name = "DistributedJets"
 uuid = "5b65064a-1d0b-5b23-8760-570290dfee43"
-version = "1.0.1"
+version = "1.1.0"
 
 [deps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
