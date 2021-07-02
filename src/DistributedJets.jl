@@ -226,6 +226,19 @@ function Base.extrema(x::DBArray{T}) where {T}
     minimum(mn),maximum(mx)
 end
 
+DBArray_local_mapreduce(f, op, x; kw...) = mapreduce(f, op, localpart(x); kw...)
+
+function Base.mapreduce(f, op, x::DBArray{T}; kw...) where {T}
+    pids = procs(x)
+    mx = zeros(T, length(pids))
+    @sync for (ipid,pid) in enumerate(pids)
+        @async begin
+            mx[ipid] = remotecall_fetch(DBArray_local_mapreduce, pid, f, op, x; kw...)::T
+        end
+    end
+    mapreduce(f, op, mx)
+end
+
 DBArray_local_mean(x::DBArray) = sum(localpart(x))
 
 function Statistics.mean(x::DBArray{T}) where {T}
