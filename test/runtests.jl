@@ -3,7 +3,7 @@ using Distributed
 #Need to remove all procs before running these tests
 addprocs(4)
 
-@everywhere using DistributedArrays, DistributedJets, JSON, Jets, LinearAlgebra, Test
+@everywhere using DistributedArrays, DistributedJets, JSON, Jets, LinearAlgebra, Statistics, Test
 
 @everywhere JopFoo_df!(d,m;diagonal,kwargs...) = d .= diagonal .* m
 @everywhere function JopFoo(diag)
@@ -236,6 +236,31 @@ end
     _mn,_mx = extrema(convert(Array,d))
     @test mn ≈ _mn
     @test mx ≈ _mx
+end
+
+@testset "DBArray, mean" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
+    d = rand(range(A))
+    μ = mean(d)
+    _μ = mean(convert(Array, d))
+    @test μ ≈ _μ
+end
+
+@testset "DBArray, variance" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
+    d = rand(range(A))
+
+    σ² = var(d)
+    _σ² = var(convert(Array, d))
+    @test σ² ≈ _σ²
+
+    σ² = var(d; mean=100.0)
+    _σ² = var(convert(Array, d); mean=100.0)
+    @test σ² ≈ _σ²
+
+    σ² = var(d; corrected=false)
+    _σ² = var(convert(Array, d); corrected=false)
+    @test σ² ≈ _σ²
 end
 
 @testset "DBArray broadcasting, 1D arrays" begin
