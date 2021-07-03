@@ -41,6 +41,7 @@ SUITE["DBArray"]["var"] = @benchmarkable var($d₁)
 SUITE["DBArray"]["var, mean"] = @benchmarkable var($d₁; mean=1.0)
 SUITE["DBArray"]["extrema"] = @benchmarkable extrema($d₁)
 SUITE["DBArray"]["broadcasting"] = @benchmarkable d₄ .= α₁*d₁ .+ α₂*d₂ .- α₃*d₃
+SUITE["DBArray"]["space from DBArray"] = @benchmarkable space($d₁)
 
 _F = DArray(I->[JopBar(100) for i in I[1], j in I[2]], (50,10), workers()[1:3], [3,1])
 F = @blockop _F
