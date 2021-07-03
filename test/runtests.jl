@@ -229,6 +229,36 @@ end
     @test typeof(norm(_d, 0.5)) == Float32
 end
 
+@testset "DBArray, mapreduce" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    @test mapreduce(abs, +, d) ≈ mapreduce(abs, +, convert(Array, d))
+end
+
+@testset "DBArray, f-maximum" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    @test maximum(abs, d) ≈ maximum(abs, convert(Array, d))
+end
+
+@testset "DBArray, maximum" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    @test maximum(d) ≈ maximum(convert(Array, d))
+end
+
+@testset "DBArray, f-minimum" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    @test maximum(abs, d) ≈ maximum(abs, convert(Array, d))
+end
+
+@testset "DBArray, minimum" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1))
+    d = rand(range(A))
+    @test minimum(d) ≈ minimum(convert(Array, d))
+end
+
 @testset "DBArray, extrema" begin
     A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (4,1), workers()[1:2])
     d = rand(range(A))
