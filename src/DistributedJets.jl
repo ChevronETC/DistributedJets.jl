@@ -66,6 +66,8 @@ function JetDSpace(blkspaces::DArray{S,1}) where {S<:JetBSpace}
     JetDSpace(blkspaces, blkindices, indices)
 end
 
+Base.:(==)(R::JetDSpace, S::JetDSpace) = R.blkspaces == S.blkspaces && R.blkindices == S.blkindices && R.indices == S.indices
+
 """
     size(R)
 returns the size of R
@@ -152,6 +154,11 @@ end
 
 DBArray(f::Function, nblks::Tuple, pids::AbstractArray) = DBArray(f, nblks, pids, DistributedArrays.defaultdist(nblks, pids))
 DBArray(f::Function, nblks::Tuple) = DBArray(f, nblks, workers()[1:min(nworkers(),nblks[1])], DistributedArrays.defaultdist(nblks, workers()[1:min(nworkers(),nblks[1])]))
+
+function Jets.space(x::DBArray)
+    blkspaces = DArray(I->[space(localpart(x)) for i in I[1]], (nprocs(x),), procs(x))
+    JetDSpace(blkspaces)
+end
 
 # DBArray array interface implementation <--
 Base.IndexStyle(::Type{T}) where {T<:DBArray} = IndexLinear()

@@ -92,6 +92,16 @@ end
     @test nblocks(R) == 2
 end
 
+@testset "JetDSpace construction from DBArray" begin
+    A = @blockop DArray(I->[JopFoo(rand(2,3)) for i in I[1], j in I[2]], (2,1), workers()[1:2])
+    R = range(A)
+    @test R == space(rand(R))
+
+    A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1), workers()[1:2])
+    R = range(A)
+    @test R == space(rand(R))
+end
+
 @testset "JetDSpace operations, 1D arrays" begin
     A = @blockop DArray(I->[JopFoo(rand(2)) for i in I[1], j in I[2]], (2,1), workers()[1:2])
     R = range(A)
