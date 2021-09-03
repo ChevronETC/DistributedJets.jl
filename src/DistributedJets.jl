@@ -347,7 +347,7 @@ struct DBArrayStyle <: Broadcast.AbstractArrayStyle{1} end
 Base.BroadcastStyle(::Type{<:DBArray}) = DBArrayStyle()
 DBArrayStyle(::Val{1}) = DBArrayStyle()
 
-function Base.similar(bc::Broadcast.Broadcasted{DBArrayStyle}, ::Type{T}) where {S,T}
+function Base.similar(bc::Broadcast.Broadcasted{DBArrayStyle}, ::Type{T}) where {T}
     A = find_dbarray(bc)
     similar(A)
 end
