@@ -68,6 +68,9 @@ end
 
 Base.:(==)(R::JetDSpace, S::JetDSpace) = R.blkspaces == S.blkspaces && R.blkindices == S.blkindices && R.indices == S.indices
 
+Base.similar(_::JetDSpace{T}, dims::NTuple{1,Int}) where {T} = JetSpace(T, dims)
+Base.similar(R::JetDSpace, dims::Int...) = similar(R, dims)
+
 """
     size(R)
 returns the size of R
