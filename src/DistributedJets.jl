@@ -85,7 +85,7 @@ Base.eltype(R::Type{JetDSpace{T}}) where {T} = T
 Base.vec(R::JetDSpace) = R
 
 Jets.indices(R::JetDSpace) = R.indices
-Jets.space(R::JetDSpace, iblock::Integer) where {T,S} = R.blkspaces[iblock]
+Jets.space(R::JetDSpace{T,S}, iblock::Integer) where {T,S} = R.blkspaces[iblock]
 Jets.nblocks(R::JetDSpace) = R.blkindices[end][end]
 
 DistributedArrays.localindices(R::JetDSpace) = R.indices[findfirst(pid->pid==myid(), procs(R))]
@@ -350,7 +350,7 @@ struct DBArrayStyle <: Broadcast.AbstractArrayStyle{1} end
 Base.BroadcastStyle(::Type{<:DBArray}) = DBArrayStyle()
 DBArrayStyle(::Val{1}) = DBArrayStyle()
 
-function Base.similar(bc::Broadcast.Broadcasted{DBArrayStyle}, ::Type{T}) where {S,T}
+function Base.similar(bc::Broadcast.Broadcasted{DBArrayStyle}, ::Type{T}) where {T}
     A = find_dbarray(bc)
     similar(A)
 end
