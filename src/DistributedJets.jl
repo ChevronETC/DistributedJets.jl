@@ -736,9 +736,9 @@ function Jets.perfstat(ops, operation, perfstatfile)
         if isfile(perfstatfile)
             _s = JSON.parse(read(perfstatfile, String))
             push!(_s["step"], Dict("pid"=>s))
-            write(perfstatfile, json(_s, 1))
+            write(perfstatfile, JSON.json(_s, 1))
         else
-            write(perfstatfile, json(Dict("step"=>[Dict("pid"=>s)]), 1))
+            write(perfstatfile, JSON.json(Dict("step"=>[Dict("pid"=>s)]), 1))
         end
     end
     nothing
